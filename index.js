@@ -6,6 +6,8 @@ const fs = require('fs-extra')
 
 const parseCommand = require('./src/utils/parseCommand.js')
 const select = require('./src/utils/select.js')
+const about = require('./src/about.js')
+const ignore = require('./src/ignore-us.js')
 const pollReactions = require('./src/poll-reactions.js')
 
 async function help (message) {
@@ -58,6 +60,12 @@ const commands = {
   'this isn\'t a poll channel': pollReactions.notPollChannel,
   'turn off poll channel mode': pollReactions.notPollChannel,
 
+  'ignore us please': ignore.ignore,
+
+  'about': about.about,
+  'who are you': about.about,
+  'introduce yourself': about.about,
+
   'help': help,
   'list all of the commands and their aliases': help
 }
@@ -65,16 +73,41 @@ const commands = {
 const client = new Client()
 
 client.on('message', async message => {
+  if (ignore.ignoring !== null) {
+    if (message.author.id === process.env.OWNER && message.content === ignore.ignoring) {
+      ignore.ignoring = null
+      await message.channel.send(select([
+        'i\'m BACK folkk',
+        'i am BACK',
+        'i have RETURNED',
+        'IGNORANCE is now CRINGE again'
+      ]))
+    }
+    return
+  }
+
   const parsed = parseCommand(message)
   // If ping
-  if (parsed !== null && !message.author.bot) {
-    if (commands[parsed]) {
-      await commands[parsed](message)
-    } else {
+  if (parsed && !message.author.bot) {
+    const { command, arguments } = parsed
+    if (command === '') {
       await message.lineReply(select([
         '<:ping:719277539113041930>',
         'please do not needlessly ping me',
-        'do you need help? reply to this message with `help`'
+        'do you need help? reply to this message with `help`',
+        'what',
+        'if you need help, reply `help`',
+        'bruh'
+      ]))
+    } else if (commands[command]) {
+      await commands[command](message, arguments)
+    } else {
+      await message.lineReply(select([
+        'idk what that means but ok',
+        'please do not needlessly ping me',
+        'was that meant to be a joke',
+        'reply `help` if you need help',
+        'reply to this message with `help` for a list of commands'
       ]))
     }
     return
