@@ -58,3 +58,15 @@ module.exports.onMessage = async message => {
     }
   }
 }
+
+module.exports.onEdit = async newMessage => {
+  if (isPollChannel(newMessage)) {
+    const emoji = newMessage.content.match(emojiRegex) || []
+    if (emoji.length > 0) {
+      // TODO: Do not re-add already-reacted emoji for speedier reaction
+      // additions
+      await Promise.all(emoji.map(em => newMessage.react(em)))
+        .catch(() => {})
+    }
+  }
+}

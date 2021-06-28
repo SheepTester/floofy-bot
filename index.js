@@ -83,6 +83,10 @@ client.on('message', async message => {
   pollReactions.onMessage(message)
 })
 
+client.on('messageUpdate', async (oldMessage, newMessage) => {
+  await pollReactions.onEdit(newMessage)
+})
+
 fs.ensureDir('./data/')
   .then(() => Promise.all([
     pollReactions.onReady()
