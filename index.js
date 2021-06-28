@@ -9,6 +9,7 @@ const select = require('./src/utils/select.js')
 const about = require('./src/about.js')
 const ignore = require('./src/ignore-us.js')
 const pollReactions = require('./src/poll-reactions.js')
+const source = require('./src/source.js')
 
 async function help (message) {
   const aliases = new Map()
@@ -62,6 +63,14 @@ const commands = {
 
   'ignore us please': ignore.ignore,
 
+  'source of <id>': source.getSource,
+  'source of <id> in <id>': source.getSource,
+  'get raw message source of message <id> in this channel': source.getSource,
+  'get raw message source of message <id> in channel <id>': source.getSource,
+  'source of <id>-<id>': source.getSourceFlipped,
+  'get source of <id>-<id>': source.getSourceFlipped,
+  'get raw message source of message in channel <id> with id <id>': source.getSourceFlipped,
+
   'about': about.about,
   'who are you': about.about,
   'introduce yourself': about.about,
@@ -102,6 +111,7 @@ client.on('message', async message => {
     } else if (commands[command]) {
       await commands[command](message, arguments)
     } else {
+      console.log(command)
       await message.lineReply(select([
         'idk what that means but ok',
         'please do not needlessly ping me',

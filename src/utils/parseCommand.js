@@ -11,8 +11,12 @@ module.exports = function parseCommand (message) {
     const command = message.content
       .replace(regexCache[bot.id], '')
       .trim()
-      .replace(/\s+/, ' ')
-      .replace(/\d+/, id => {
+      .replace(/\s+/g, ' ')
+      .replace(/<(?:[#@]!?|a?:\w+:)(\d+)>/g, (match, id, otherId) => {
+        arguments.push(id)
+        return '<id>'
+      })
+      .replace(/\d{15,20}/g, id => {
         arguments.push(id)
         return '<id>'
       })
