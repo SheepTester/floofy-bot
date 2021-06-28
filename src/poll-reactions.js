@@ -1,9 +1,15 @@
-import { CachedMap } from './utils/CachedMap.js'
-import { select } from './utils/select.js'
+const emojiList = require('./emoji.json')
+const CachedMap = require('./utils/CachedMap.js')
+const select = require('./utils/select.js')
+
+const emojiRegex = new RegExp(`<a?:\\w+:\\d+>|${
+  emojiList
+    .join('|')
+    .replace(/[+*]/g, m => '\\' + m)
+}`, 'g')
 
 const pollChannels = new CachedMap('./data/poll-reactions.json')
-
-export const onReady = pollChannels.read
+module.exports.onReady = pollChannels.read
 
 function isPollChannel (message) {
   return pollChannels.get(message.channel.id, false)
@@ -11,7 +17,7 @@ function isPollChannel (message) {
 
 const ok = ['👌', '🆗', '👍', '✅']
 
-export async function pollChannel (message) {
+module.exports.pollChannel = async message => {
   if (isPollChannel(message)) {
     await message.lineReply(select([
       'this is already a poll channel though',
@@ -24,7 +30,7 @@ export async function pollChannel (message) {
   }
 }
 
-export async function notPollChannel (message) {
+module.exports.notPollChannel = async message => {
   if (isPollChannel(message)) {
     pollChannels.set(message.channel.id, false).save()
     await message.react(select(ok))
@@ -37,8 +43,18 @@ export async function notPollChannel (message) {
   return true
 }
 
-export async function onMessage (message) {
+module.exports.onMessage = async message => {
   if (isPollChannel(message)) {
-    console.log(message.content)
+    const emoji = message.content.match(emojiRegex) || []
+    if (emoji.length === 0) {
+      await Promise.all([
+        message.react('👍'),
+        message.react('👎')
+      ])
+        .catch(() => {})
+    } else {
+      await Promise.all(emoji.map(em => message.react(em)))
+        .catch(() => {})
+    }
   }
 }

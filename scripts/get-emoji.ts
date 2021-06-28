@@ -1,4 +1,4 @@
-// deno run --allow-net=discord.com --allow-write=./src/emoji.txt scripts/get-emoji.ts
+// deno run --allow-net=discord.com --allow-write=./src/emoji.json scripts/get-emoji.ts
 
 import * as z from 'https://deno.land/x/zod@v3.2/mod.ts'
 
@@ -46,9 +46,11 @@ async function onEmojiData (emojiData: Record<string, Emoji[]>, preview: number 
         ...diversityChildren.map(({ surrogates }) => surrogates)
       ]))
     .sort((a, b) => b.length - a.length)
-    .map(char => char + '\n')
-    .join('')
-  await Deno.writeTextFile('./src/emoji.txt', surrogates)
+  await Deno.writeTextFile(
+    './src/emoji.json',
+    JSON.stringify(surrogates, null, '\t')
+      .replaceAll('\t', '')
+  )
 
   // Longest emoji names because why not?
   if (preview > 0) {

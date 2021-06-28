@@ -1,6 +1,6 @@
-import { readFile, writeFile } from 'fs/promises'
+const fs = require('fs-extra')
 
-export class CachedMap {
+module.exports = class CachedMap {
   #path
   #object
 
@@ -9,7 +9,7 @@ export class CachedMap {
   }
 
   read = async () => {
-    this.#object = JSON.parse(await readFile(this.#path, 'utf-8').catch(() => '{}'))
+    this.#object = JSON.parse(await fs.readFile(this.#path, 'utf-8').catch(() => '{}'))
   }
 
   has (id) {
@@ -26,6 +26,6 @@ export class CachedMap {
   }
 
   async save () {
-    await writeFile(this.#path, JSON.stringify(this.#object, null, '\t'))
+    await fs.writeFile(this.#path, JSON.stringify(this.#object, null, '\t'))
   }
 }

@@ -1,13 +1,12 @@
-import dotenv from 'dotenv'
-dotenv.config()
+require('dotenv').config()
 
-import { Client } from 'discord.js'
-import 'discord-reply'
-import fsExtra from 'fs-extra'
+const { Client } = require('discord.js')
+require('discord-reply')
+const fs = require('fs-extra')
 
-import { parseCommand } from './src/utils/parseCommand.js'
-import { select } from './src/utils/select.js'
-import * as pollReactions from './src/poll-reactions.js'
+const parseCommand = require('./src/utils/parseCommand.js')
+const select = require('./src/utils/select.js')
+const pollReactions = require('./src/poll-reactions.js')
 
 async function help (message) {
   const aliases = new Map()
@@ -66,11 +65,9 @@ const commands = {
 const client = new Client()
 
 client.on('message', async message => {
-  if (message.author.bot) return
-
   const parsed = parseCommand(message)
   // If ping
-  if (parsed !== null) {
+  if (parsed !== null && !message.author.bot) {
     if (commands[parsed]) {
       await commands[parsed](message)
     } else {
@@ -86,7 +83,7 @@ client.on('message', async message => {
   pollReactions.onMessage(message)
 })
 
-fsExtra.ensureDir('./data/')
+fs.ensureDir('./data/')
   .then(() => Promise.all([
     pollReactions.onReady()
   ]))
