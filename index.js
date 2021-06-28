@@ -1,16 +1,30 @@
-require('dotenv').config()
+import dotenv from 'dotenv'
+dotenv.config()
 
-const Discord = require('discord.js')
-const client = new Discord.Client()
+import { Client } from 'discord.js'
+import 'discord-reply'
+import fsExtra from 'fs-extra'
+import { parseCommand } from './src/utils/parseCommand.js'
+import { ready, handlers } from './src/handlers.js'
 
-client.on('ready', () => {
-  console.log(`Logged in as ${client.user.tag}!`)
-})
+const client = new Client()
 
 client.on('message', async message => {
-  if (message.content === 'wow') {
-    message.reply('hi wow')
+  const parsed = parseCommand(message)
+  const data = { parsed, message, client }
+  for (const handler of handlers) {
+    if (await handler(data)) {
+      return
+    }
   }
 })
 
-client.login(process.env.TOKEN)
+fsExtra.ensureDir('./data/')
+  .then(() => ready())
+  .then(() => {
+    client.login(process.env.TOKEN)
+  })
+  .catch(err => {
+    console.error(err)
+    process.exit(1)
+  })
