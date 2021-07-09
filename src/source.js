@@ -40,3 +40,18 @@ module.exports.getSource = async (message, [messageId, channelId = message.chann
 
 module.exports.getSourceFlipped = async (message, [channelId, messageId]) =>
   module.exports.getSource(message, [messageId, channelId])
+
+module.exports.getDate = async (message, [id = message.author.id]) => {
+  const timestamp = (BigInt(id) >> 22n) / 1000n + 1420070400n
+  message.lineReply(
+    select([
+      '\'twas made %F (%R)',
+      'it was created on %F, %R',
+      'if my sixth sense is CORRECT it materialised into existence on %F, %R',
+      'creation happened %R on %F',
+      'on %F, it poofed into existence. that was %R!'
+    ])
+      .replace('%F', `<t:${timestamp}:F>`)
+      .replace('%R', `<t:${timestamp}:R>`)
+  )
+}

@@ -71,6 +71,11 @@ const commands = {
   'get source of <id>-<id>': source.getSourceFlipped,
   'get raw message source of message in channel <id> with id <id>': source.getSourceFlipped,
 
+  'how old is <id>': source.getDate,
+  'when was <id> created': source.getDate,
+  'when did i join discord': source.getDate,
+  'how old am i': source.getDate,
+
   'about': about.about,
   'who are you': about.about,
   'introduce yourself': about.about,

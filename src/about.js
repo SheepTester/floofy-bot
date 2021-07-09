@@ -36,7 +36,10 @@ module.exports.about = async message => {
           'useful tip: make sure your code does not have `\'use script\'` because it makes it more prone to errors',
           'did you know: javascript is used to mod [minecraft](https://minecraft.fandom.com/wiki/Bedrock_Edition_beta_scripting_documentation#Scripting_system)'
         ])
-      ].join('\n\n')
+      ].join('\n\n'),
+      footer: {
+        text: 'Running floofy-bot'
+      }
     }
   })
 }

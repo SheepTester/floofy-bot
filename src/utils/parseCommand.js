@@ -12,7 +12,8 @@ module.exports = function parseCommand (message) {
       .replace(regexCache[bot.id], '')
       .trim()
       .replace(/\s+/g, ' ')
-      .replace(/<(?:[#@]!?|a?:\w+:)(\d+)>/g, (match, id, otherId) => {
+      .toLowerCase()
+      .replace(/<(?:[#@]!?|a?:\w+:)(\d+)>/g, (_match, id) => {
         arguments.push(id)
         return '<id>'
       })
