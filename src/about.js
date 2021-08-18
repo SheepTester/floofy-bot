@@ -1,12 +1,7 @@
 const select = require('./utils/select.js')
 
 module.exports.about = async message => {
-  message.lineReply(select([
-    'hi',
-    'i am moofy',
-    'hello',
-    'i am me'
-  ]), {
+  message.lineReply(select(['hi', 'i am moofy', 'hello', 'i am me']), {
     embed: {
       title: select([
         'who am i',
@@ -31,9 +26,9 @@ module.exports.about = async message => {
         select([
           'fact: java is short for javascript',
           'tip: in js, `let` is unsafe, always use `var`',
-          'fun fact: you made javascript, that\'s why it sucks',
-          'cool tip: make your js arrays sparce with `arr[5000] = \'lol\'` then delete it using `delete arr[5000]` to spice up performance',
-          'useful tip: make sure your code does not have `\'use script\'` because it makes it more prone to errors',
+          "fun fact: you made javascript, that's why it sucks",
+          "cool tip: make your js arrays sparce with `arr[5000] = 'lol'` then delete it using `delete arr[5000]` to spice up performance",
+          "useful tip: make sure your code does not have `'use script'` because it makes it more prone to errors",
           'did you know: javascript is used to mod [minecraft](https://minecraft.fandom.com/wiki/Bedrock_Edition_beta_scripting_documentation#Scripting_system)'
         ])
       ].join('\n\n'),

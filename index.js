@@ -19,33 +19,36 @@ async function help (message) {
     }
     aliases.get(commandFunc).add(commandName)
   }
-  message.lineReply(select([
-    'here you gooo',
-    'taste and sample as you please',
-    'please read carefully',
-    'the aliases sometimes describe what the command does, sometimes',
-    'helped'
-  ]), {
-    embed: {
-      title: select([
-        'nice, some commands',
-        'commands and aliases',
-        'words that i will accept',
-        'helpp'
-      ]),
-      fields: Array.from(aliases.values(), ([name, ...aliases]) => ({
-        name,
-        value: aliases.length
-          ? `or ${aliases.map(alias => `\`${alias}\``).join(' or ')}`
-          : select([
-            'no aliases, nice',
-            'that\'s it',
-            'this command has no aliases'
-          ]),
-        inline: true
-      }))
+  message.lineReply(
+    select([
+      'here you gooo',
+      'taste and sample as you please',
+      'please read carefully',
+      'the aliases sometimes describe what the command does, sometimes',
+      'helped'
+    ]),
+    {
+      embed: {
+        title: select([
+          'nice, some commands',
+          'commands and aliases',
+          'words that i will accept',
+          'helpp'
+        ]),
+        fields: Array.from(aliases.values(), ([name, ...aliases]) => ({
+          name,
+          value: aliases.length
+            ? `or ${aliases.map(alias => `\`${alias}\``).join(' or ')}`
+            : select([
+                'no aliases, nice',
+                "that's it",
+                'this command has no aliases'
+              ]),
+          inline: true
+        }))
+      }
     }
-  })
+  )
 }
 const commands = {
   'poll channel': pollReactions.pollChannel,
@@ -58,7 +61,7 @@ const commands = {
   'not poll': pollReactions.notPollChannel,
   'this is not a poll': pollReactions.notPollChannel,
   'this is not a poll channel': pollReactions.notPollChannel,
-  'this isn\'t a poll channel': pollReactions.notPollChannel,
+  "this isn't a poll channel": pollReactions.notPollChannel,
   'turn off poll channel mode': pollReactions.notPollChannel,
 
   'ignore us please': ignore.ignore,
@@ -69,18 +72,19 @@ const commands = {
   'get raw message source of message <id> in channel <id>': source.getSource,
   'source of <id>-<id>': source.getSourceFlipped,
   'get source of <id>-<id>': source.getSourceFlipped,
-  'get raw message source of message in channel <id> with id <id>': source.getSourceFlipped,
+  'get raw message source of message in channel <id> with id <id>':
+    source.getSourceFlipped,
 
   'how old is <id>': source.getDate,
   'when was <id> created': source.getDate,
   'when did i join discord': source.getDate,
   'how old am i': source.getDate,
 
-  'about': about.about,
+  about: about.about,
   'who are you': about.about,
   'introduce yourself': about.about,
 
-  'help': help,
+  help: help,
   'list all of the commands and their aliases': help
 }
 
@@ -88,14 +92,19 @@ const client = new Client()
 
 client.on('message', async message => {
   if (ignore.ignoring !== null) {
-    if (message.author.id === process.env.OWNER && message.content === ignore.ignoring) {
+    if (
+      message.author.id === process.env.OWNER &&
+      message.content === ignore.ignoring
+    ) {
       ignore.ignoring = null
-      await message.channel.send(select([
-        'i\'m BACK folkk',
-        'i am BACK',
-        'i have RETURNED',
-        'IGNORANCE is now CRINGE again'
-      ]))
+      await message.channel.send(
+        select([
+          "i'm BACK folkk",
+          'i am BACK',
+          'i have RETURNED',
+          'IGNORANCE is now CRINGE again'
+        ])
+      )
     }
     return
   }
@@ -105,25 +114,29 @@ client.on('message', async message => {
   if (parsed && !message.author.bot) {
     const { command, arguments } = parsed
     if (command === '') {
-      await message.lineReply(select([
-        '<:ping:719277539113041930>',
-        'please do not needlessly ping me',
-        'do you need help? reply to this message with `help`',
-        'what',
-        'if you need help, reply `help`',
-        'bruh'
-      ]))
+      await message.lineReply(
+        select([
+          '<:ping:719277539113041930>',
+          'please do not needlessly ping me',
+          'do you need help? reply to this message with `help`',
+          'what',
+          'if you need help, reply `help`',
+          'bruh'
+        ])
+      )
     } else if (commands[command]) {
       await commands[command](message, arguments)
     } else {
       console.log(command)
-      await message.lineReply(select([
-        'idk what that means but ok',
-        'please do not needlessly ping me',
-        'was that meant to be a joke',
-        'reply `help` if you need help',
-        'reply to this message with `help` for a list of commands'
-      ]))
+      await message.lineReply(
+        select([
+          'idk what that means but ok',
+          'please do not needlessly ping me',
+          'was that meant to be a joke',
+          'reply `help` if you need help',
+          'reply to this message with `help` for a list of commands'
+        ])
+      )
     }
     return
   }
@@ -136,9 +149,7 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
 })
 
 fs.ensureDir('./data/')
-  .then(() => Promise.all([
-    pollReactions.onReady()
-  ]))
+  .then(() => Promise.all([pollReactions.onReady()]))
   .then(() => {
     client.login(process.env.TOKEN)
   })

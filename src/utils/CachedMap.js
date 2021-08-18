@@ -9,7 +9,9 @@ module.exports = class CachedMap {
   }
 
   read = async () => {
-    this.#object = JSON.parse(await fs.readFile(this.#path, 'utf-8').catch(() => '{}'))
+    this.#object = JSON.parse(
+      await fs.readFile(this.#path, 'utf-8').catch(() => '{}')
+    )
   }
 
   has (id) {
