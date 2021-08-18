@@ -64,7 +64,7 @@ async function onEmojiData (
     .sort((a, b) => b.length - a.length)
   await Deno.writeTextFile(
     './src/emoji.json',
-    JSON.stringify(surrogates, null, '\t').replaceAll('\t', '')
+    JSON.stringify(surrogates, null, '\t').replaceAll('\t', '') + '\n'
   )
 
   // Longest emoji names because why not?
