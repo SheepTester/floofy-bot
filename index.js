@@ -10,6 +10,7 @@ const about = require('./src/about.js')
 const ignore = require('./src/ignore-us.js')
 const pollReactions = require('./src/poll-reactions.js')
 const source = require('./src/source.js')
+const internals = require('./src/internals.js')
 
 async function help (message) {
   const aliases = new Map()
@@ -65,6 +66,7 @@ const commands = {
   'turn off poll channel mode': pollReactions.notPollChannel,
 
   'ignore us please': ignore.ignore,
+  exeunt: internals.exit,
 
   'source of <id>': source.getSource,
   'source of <id> in <id>': source.getSource,
