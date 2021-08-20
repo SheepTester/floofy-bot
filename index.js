@@ -6,15 +6,26 @@ const fs = require('fs-extra')
 
 const parseCommand = require('./src/utils/parseCommand.js')
 const select = require('./src/utils/select.js')
-const about = require('./src/about.js')
-const ignore = require('./src/ignore-us.js')
-const pollReactions = require('./src/poll-reactions.js')
-const source = require('./src/source.js')
-const internals = require('./src/internals.js')
+const cmd = {
+  pollReactions: require('./src/poll-reactions.js'),
+  source: require('./src/source.js'),
+  welcome: require('./src/welcome.js'),
+
+  about: require('./src/about.js'),
+  ignore: require('./src/ignore-us.js'),
+  internals: require('./src/internals.js')
+}
 
 async function help (message) {
   const aliases = new Map()
   for (const [commandName, commandFunc] of Object.entries(commands)) {
+    // Don't show owner commands to non-owners
+    if (
+      message.author.id !== process.env.OWNER &&
+      commandName in ownerCommands
+    ) {
+      continue
+    }
     if (!aliases.has(commandFunc)) {
       aliases.set(commandFunc, new Set())
     }
@@ -51,54 +62,63 @@ async function help (message) {
     }
   )
 }
+const ownerCommands = {
+  'ignore us please': cmd.ignore.ignore,
+  exeunt: cmd.internals.exit
+}
 const commands = {
-  'poll channel': pollReactions.pollChannel,
-  'this is poll': pollReactions.pollChannel,
-  'this is poll channel': pollReactions.pollChannel,
-  'this is a poll channel': pollReactions.pollChannel,
-  'turn on poll channel mode which ': pollReactions.pollChannel,
+  'poll channel': cmd.pollReactions.pollChannel,
+  'this is poll': cmd.pollReactions.pollChannel,
+  'this is poll channel': cmd.pollReactions.pollChannel,
+  'this is a poll channel': cmd.pollReactions.pollChannel,
+  'turn on poll channel mode which ': cmd.pollReactions.pollChannel,
 
-  'not poll channel': pollReactions.notPollChannel,
-  'not poll': pollReactions.notPollChannel,
-  'this is not a poll': pollReactions.notPollChannel,
-  'this is not a poll channel': pollReactions.notPollChannel,
-  "this isn't a poll channel": pollReactions.notPollChannel,
-  'turn off poll channel mode': pollReactions.notPollChannel,
+  'not poll channel': cmd.pollReactions.notPollChannel,
+  'not poll': cmd.pollReactions.notPollChannel,
+  'this is not a poll': cmd.pollReactions.notPollChannel,
+  'this is not a poll channel': cmd.pollReactions.notPollChannel,
+  "this isn't a poll channel": cmd.pollReactions.notPollChannel,
+  'turn off poll channel mode': cmd.pollReactions.notPollChannel,
 
-  'ignore us please': ignore.ignore,
-  exeunt: internals.exit,
+  'source of <id>': cmd.source.getSource,
+  'cmd.source of <id> in <id>': cmd.source.getSource,
+  'get raw message cmd.source of message <id> in this channel':
+    cmd.source.getSource,
+  'get raw message cmd.source of message <id> in channel <id>':
+    cmd.source.getSource,
+  'cmd.source of <id>-<id>': cmd.source.getSourceFlipped,
+  'get cmd.source of <id>-<id>': cmd.source.getSourceFlipped,
+  'get raw message cmd.source of message in channel <id> with id <id>':
+    cmd.source.getSourceFlipped,
 
-  'source of <id>': source.getSource,
-  'source of <id> in <id>': source.getSource,
-  'get raw message source of message <id> in this channel': source.getSource,
-  'get raw message source of message <id> in channel <id>': source.getSource,
-  'source of <id>-<id>': source.getSourceFlipped,
-  'get source of <id>-<id>': source.getSourceFlipped,
-  'get raw message source of message in channel <id> with id <id>':
-    source.getSourceFlipped,
+  'how old is <id>': cmd.source.getDate,
+  'when was <id> created': cmd.source.getDate,
+  'when did i join discord': cmd.source.getDate,
+  'how old am i': cmd.source.getDate,
 
-  'how old is <id>': source.getDate,
-  'when was <id> created': source.getDate,
-  'when did i join discord': source.getDate,
-  'how old am i': source.getDate,
+  'welcome new folk in <id> with:': cmd.welcome.setWelcome,
+  'when a user joins the server send a message in channel <id> containing the following lines:':
+    cmd.welcome.setWelcome,
 
-  about: about.about,
-  'who are you': about.about,
-  'introduce yourself': about.about,
+  about: cmd.about.about,
+  'who are you': cmd.about.about,
+  'introduce yourself': cmd.about.about,
 
   help: help,
-  'list all of the commands and their aliases': help
+  'list all of the commands and their aliases': help,
+
+  ...ownerCommands
 }
 
 const client = new Client()
 
 client.on('message', async message => {
-  if (ignore.ignoring !== null) {
+  if (cmd.ignore.ignoring !== null) {
     if (
       message.author.id === process.env.OWNER &&
-      message.content === ignore.ignoring
+      message.content === cmd.ignore.ignoring
     ) {
-      ignore.ignoring = null
+      cmd.ignore.ignoring = null
       await message.channel.send(
         select([
           "i'm BACK folkk",
@@ -143,18 +163,25 @@ client.on('message', async message => {
     return
   }
 
-  pollReactions.onMessage(message)
+  await cmd.pollReactions.onMessage(message)
+  await cmd.welcome.onMessage(message)
 })
 
-client.on('messageUpdate', async (oldMessage, newMessage) => {
-  await pollReactions.onEdit(newMessage)
+client.on('messageUpdate', async (_oldMessage, newMessage) => {
+  await cmd.pollReactions.onEdit(newMessage)
+})
+
+client.on('guildMemberAdd', async member => {
+  await cmd.welcome.onJoin(member)
+})
+
+process.on('unhandledRejection', reason => {
+  console.error(reason)
 })
 
 fs.ensureDir('./data/')
-  .then(() => Promise.all([pollReactions.onReady()]))
-  .then(() => {
-    client.login(process.env.TOKEN)
-  })
+  .then(() => Promise.all([cmd.pollReactions.onReady(), cmd.welcome.onReady()]))
+  .then(() => client.login(process.env.TOKEN))
   .catch(err => {
     console.error(err)
     process.exit(1)

@@ -1,6 +1,7 @@
 const { Message, Permissions } = require('discord.js')
 const emojiList = require('./emoji.json')
 const CachedMap = require('./utils/CachedMap.js')
+const ok = require('./utils/ok.js')
 const select = require('./utils/select.js')
 
 const emojiRegex = new RegExp(
@@ -14,8 +15,6 @@ module.exports.onReady = pollChannels.read
 function isPollChannel (message) {
   return pollChannels.get(message.channel.id, false)
 }
-
-const ok = ['👌', '🆗', '👍', '✅']
 
 /** @param {Message} message */
 module.exports.pollChannel = async message => {

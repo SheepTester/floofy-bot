@@ -8,7 +8,8 @@ module.exports = function parseCommand (message) {
   }
   if (message.mentions.has(bot) || regexCache[bot.id].test(message.content)) {
     const arguments = []
-    const command = message.content
+    const [rawCommand, ...lines] = message.content.split('\n')
+    const command = rawCommand
       .replace(regexCache[bot.id], '')
       .trim()
       .replace(/\s+/g, ' ')
@@ -22,6 +23,7 @@ module.exports = function parseCommand (message) {
         return '<id>'
       })
       .toLowerCase()
+    arguments.push(lines.join('\n'))
     return {
       command,
       arguments
