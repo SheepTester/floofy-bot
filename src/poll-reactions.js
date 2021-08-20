@@ -1,3 +1,4 @@
+const { Message, Permissions } = require('discord.js')
 const emojiList = require('./emoji.json')
 const CachedMap = require('./utils/CachedMap.js')
 const select = require('./utils/select.js')
@@ -16,7 +17,14 @@ function isPollChannel (message) {
 
 const ok = ['👌', '🆗', '👍', '✅']
 
+/** @param {Message} message */
 module.exports.pollChannel = async message => {
+  if (!message.member.hasPermission(Permissions.FLAGS.MANAGE_CHANNELS)) {
+    await message.lineReply(
+      "you can't even manage channels, why should i listen to you"
+    )
+    return
+  }
   if (isPollChannel(message)) {
     await message.lineReply(
       select([
@@ -32,6 +40,12 @@ module.exports.pollChannel = async message => {
 }
 
 module.exports.notPollChannel = async message => {
+  if (!message.member.hasPermission(Permissions.FLAGS.MANAGE_CHANNELS)) {
+    await message.lineReply(
+      "you can't even manage channels, why should i listen to you"
+    )
+    return
+  }
   if (isPollChannel(message)) {
     pollChannels.set(message.channel.id, false).save()
     await message.react(select(ok))
@@ -43,17 +57,15 @@ module.exports.notPollChannel = async message => {
       ])
     )
   }
-  return true
 }
 
 module.exports.onMessage = async message => {
   if (isPollChannel(message)) {
     const emoji = message.content.match(emojiRegex) || []
     if (emoji.length === 0) {
-      await Promise.all([
-        message.react('👍'),
-        message.react('👎')
-      ]).catch(() => {})
+      await Promise.all([message.react('👍'), message.react('👎')]).catch(
+        () => {}
+      )
     } else {
       await Promise.all(emoji.map(em => message.react(em))).catch(() => {})
     }
