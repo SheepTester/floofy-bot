@@ -1,4 +1,4 @@
-const { Message, Permissions, GuildMember, TextChannel } = require('discord.js')
+const { Message, GuildMember } = require('discord.js')
 const CachedMap = require('./utils/CachedMap')
 const ok = require('./utils/ok.js')
 const select = require('./utils/select')
@@ -12,15 +12,14 @@ module.exports.onReady = () =>
  * @param {Message} message
  * @param {string[]} arguments
  */
-module.exports.setWelcome = async (message, arguments) => {
-  if (!message.member.hasPermission(Permissions.FLAGS.MANAGE_GUILD)) {
+module.exports.setWelcome = async (message, [channelId, welcomeMsg]) => {
+  if (!message.channel.permissionsFor(message.member).has('MANAGE_GUILD')) {
     await message.lineReply(
       'why should i obey you if you cant even manage the server lmao'
     )
     return
   }
 
-  const [channelId, welcomeMsg] = arguments
   welcomeChannels
     .set(message.guild.id, { channelId, message: welcomeMsg })
     .save()
@@ -31,7 +30,7 @@ module.exports.setWelcome = async (message, arguments) => {
 module.exports.onJoin = async member => {
   const { channelId, message } = welcomeChannels.get(member.guild.id, {})
   if (!channelId) return
-  const channel = member.client.channels.cache.get(channelId)
+  const channel = member.guild.channels.cache.get(channelId)
   if (!channel) return
   await channel.send(
     select([

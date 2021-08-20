@@ -1,4 +1,4 @@
-const { Message, Permissions } = require('discord.js')
+const { Message } = require('discord.js')
 const emojiList = require('./emoji.json')
 const CachedMap = require('./utils/CachedMap.js')
 const ok = require('./utils/ok.js')
@@ -18,7 +18,7 @@ function isPollChannel (message) {
 
 /** @param {Message} message */
 module.exports.pollChannel = async message => {
-  if (!message.member.hasPermission(Permissions.FLAGS.MANAGE_CHANNELS)) {
+  if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
     await message.lineReply(
       "you can't even manage channels, why should i listen to you"
     )
@@ -39,7 +39,7 @@ module.exports.pollChannel = async message => {
 }
 
 module.exports.notPollChannel = async message => {
-  if (!message.member.hasPermission(Permissions.FLAGS.MANAGE_CHANNELS)) {
+  if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
     await message.lineReply(
       "you can't even manage channels, why should i listen to you"
     )

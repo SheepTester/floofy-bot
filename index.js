@@ -10,6 +10,7 @@ const cmd = {
   pollReactions: require('./src/poll-reactions.js'),
   source: require('./src/source.js'),
   welcome: require('./src/welcome.js'),
+  voteLockdown: require('./src/vote-lockdown.js'),
 
   about: require('./src/about.js'),
   ignore: require('./src/ignore-us.js'),
@@ -100,6 +101,14 @@ const commands = {
   'when a user joins the server send a message in channel <id> containing the following lines:':
     cmd.welcome.setWelcome,
 
+  'allow people to lock down <id>': cmd.voteLockdown.setLockdownCategory,
+  'set lockdown category id to <id>': cmd.voteLockdown.setLockdownCategory,
+
+  'close the gates': cmd.voteLockdown.voteLockdown,
+  'vote for lockdown': cmd.voteLockdown.voteLockdown,
+  "deny the unverified access to the commoners' channels":
+    cmd.voteLockdown.voteLockdown,
+
   about: cmd.about.about,
   'who are you': cmd.about.about,
   'introduce yourself': cmd.about.about,
@@ -180,7 +189,13 @@ process.on('unhandledRejection', reason => {
 })
 
 fs.ensureDir('./data/')
-  .then(() => Promise.all([cmd.pollReactions.onReady(), cmd.welcome.onReady()]))
+  .then(() =>
+    Promise.all([
+      cmd.pollReactions.onReady(),
+      cmd.welcome.onReady(),
+      cmd.voteLockdown.onReady()
+    ])
+  )
   .then(() => client.login(process.env.TOKEN))
   .catch(err => {
     console.error(err)
