@@ -7,6 +7,7 @@ const select = require('./utils/select.js')
  * @property {string} author
  * @property {string} content
  * @property {string} url
+ * @property {boolean} [role]
  */
 
 /** @type {CachedMap<LastPing>} */
@@ -29,7 +30,7 @@ module.exports.onMessage = async message => {
       mentionCache.set(`${channelId}-everyone`, msg)
     }
     for (const roleId of mentions.roles.keys()) {
-      mentionCache.set(`${channelId}-${roleId}`, msg)
+      mentionCache.set(`${channelId}-${roleId}`, { ...msg, role: true })
     }
     // Ignore user pings from this bot
     if (message.author.id !== message.client.user.id) {
@@ -62,9 +63,19 @@ module.exports.whoPinged = async (message, args) => {
       embed: {
         // This breaks if a Nitro user repeats ]( 2000 times in a message,
         // whatever
-        description: `<@${lastMention.author}> [pinged ${them}](${
+        description: `<@${lastMention.author}> pinged ${
+          targetId === 'everyone'
+            ? '@everyone'
+            : `<@${lastMention.role ? '&' : ''}${targetId}>`
+        } ([link to message](${
           lastMention.url
-        }):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`
+        })):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`,
+        footer: {
+          text:
+            !lastMention.role && targetId !== 'everyone'
+              ? "this only shows direct pings to the user, btw, it doesn't factor in role and everyone pings"
+              : ''
+        }
       }
     })
   } else {
