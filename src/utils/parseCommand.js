@@ -14,16 +14,19 @@ module.exports = function parseCommand (message) {
       .trim()
       .replace(/\s+/g, ' ')
       .toLowerCase()
-      .replace(/<(?:[#@]!?|a?:\w+:)(\d+)>/g, (_match, id) => {
-        arguments.push(id)
-        return '<id>'
-      })
-      .replace(/\d{15,20}/g, id => {
-        arguments.push(id)
-        return '<id>'
-      })
+      // Must be a single regex or then IDs will be added in the wrong order
+      .replace(
+        /<(?:[#@][!&]?|a?:\w+:)(\d+)>|\d{15,20}/g,
+        (match, mentionId) => {
+          const id = match[0] === '<' ? mentionId : match
+          arguments.push(id)
+          return '<id>'
+        }
+      )
       .toLowerCase()
-    arguments.push(lines.join('\n'))
+    if (lines.length > 0) {
+      arguments.push(lines.join('\n'))
+    }
     return {
       command,
       arguments

@@ -11,6 +11,7 @@ const cmd = {
   source: require('./src/source.js'),
   welcome: require('./src/welcome.js'),
   voteLockdown: require('./src/vote-lockdown.js'),
+  mentions: require('./src/mentions.js'),
 
   about: require('./src/about.js'),
   ignore: require('./src/ignore-us.js'),
@@ -97,8 +98,22 @@ const commands = {
   'when did i join discord': cmd.source.getDate,
   'how old am i': cmd.source.getDate,
 
+  'who pinged <id>': cmd.mentions.whoPinged,
+  'who pinged <id> in <id>': cmd.mentions.whoPinged,
+  'who pinged role <id> here': cmd.mentions.whoPinged,
+  'who pinged user <id> in channel <id>': cmd.mentions.whoPinged,
+  'who pinged everyone': cmd.mentions.whoPinged,
+  'who pinged everyone here': cmd.mentions.whoPinged,
+  'who pinged everyone in <id>': cmd.mentions.whoPinged,
+  'who pinged everyone in channel <id>': cmd.mentions.whoPinged,
+
+  'who pinged me': cmd.mentions.whoPingedMe,
+  'who pinged': cmd.mentions.whoPingedMe,
+  'who pinged me in channel <id>': cmd.mentions.whoPingedMe,
+  'who pinged me in <id>': cmd.mentions.whoPingedMe,
+
   'welcome new folk in <id> with:': cmd.welcome.setWelcome,
-  'when a user joins the server send a message in channel <id> containing the following lines:':
+  'when a user joins the server send a message in channel <id> containing the following starting on the next line:':
     cmd.welcome.setWelcome,
 
   'allow people to lock down <id>': cmd.voteLockdown.setLockdownCategory,
@@ -169,11 +184,11 @@ client.on('message', async message => {
         ])
       )
     }
-    return
   }
 
   await cmd.pollReactions.onMessage(message)
   await cmd.welcome.onMessage(message)
+  await cmd.mentions.onMessage(message)
 })
 
 client.on('messageUpdate', async (_oldMessage, newMessage) => {
@@ -193,7 +208,8 @@ fs.ensureDir('./data/')
     Promise.all([
       cmd.pollReactions.onReady(),
       cmd.welcome.onReady(),
-      cmd.voteLockdown.onReady()
+      cmd.voteLockdown.onReady(),
+      cmd.mentions.onReady()
     ])
   )
   .then(() => client.login(process.env.TOKEN))

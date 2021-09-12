@@ -53,6 +53,7 @@ module.exports.onJoin = async member => {
 
 /** @param {Message} message */
 module.exports.onMessage = async message => {
+  if (!message.guild) return
   const { channelId } = welcomeChannels.get(message.guild.id, {})
   if (message.channel.id === channelId && !message.author.bot) {
     if (!sentienceMsgSent.get(`${message.guild.id}-${message.author.id}`)) {
