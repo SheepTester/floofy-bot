@@ -9,18 +9,18 @@ module.exports.getSource = async (
     .fetch(channelId)
     .catch(() => null)
   if (!channel) {
-    return message.lineReply(`can't get channel <#${channelId}>`)
+    return message.reply(`can't get channel <#${channelId}>`)
   }
   if (!channel.isText()) {
-    return message.lineReply(
+    return message.reply(
       `<#${channelId}> is not a channel with messages you fool`
     )
   }
   const msg = await channel.messages.fetch(messageId).catch(() => null)
   if (!msg) {
-    return message.lineReply(`can't get the message with id ${messageId}`)
+    return message.reply(`can't get the message with id ${messageId}`)
   }
-  return message.lineReply(
+  return message.reply(
     select(['here you go', 'i n s p e c t', 'hmm']),
     // If the message might be too long for an embed or can't be contained in a
     // code block or has custom emoji, upload a text file
@@ -43,7 +43,7 @@ module.exports.getSourceFlipped = async (message, [channelId, messageId]) =>
 
 module.exports.getDate = async (message, [id = message.author.id]) => {
   const timestamp = (BigInt(id) >> 22n) / 1000n + 1420070400n
-  message.lineReply(
+  message.reply(
     select([
       "'twas made %F (%R)",
       'it was created on %F, %R',

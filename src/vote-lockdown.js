@@ -11,7 +11,7 @@ module.exports.onReady = () =>
 /** @param {Message} message */
 module.exports.setLockdownCategory = async (message, [categoryId]) => {
   if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
-    await message.lineReply(
+    await message.reply(
       'lol first show me that you can manage chanenls then we talk'
     )
     return
@@ -29,7 +29,7 @@ module.exports.voteLockdown = async message => {
   const categoryId = lockdownCategories.get(message.guild.id)
   const category = message.guild.channels.cache.get(categoryId)
   if (!category) {
-    await message.lineReply("server doesn't have category set to lock down")
+    await message.reply("server doesn't have category set to lock down")
     return
   }
 
@@ -42,7 +42,7 @@ module.exports.voteLockdown = async message => {
   }
   if (votes.find(vote => vote.user === message.author.id)) {
     lockdownVotes.save()
-    await message.lineReply("tsk tsk, you've already voted in the past 10 min")
+    await message.reply("tsk tsk, you've already voted in the past 10 min")
     return
   } else {
     if (votes.length === 0) {
@@ -70,7 +70,7 @@ module.exports.voteLockdown = async message => {
         : 'unfortunately i lack the perms to change channel perms oopsi'
     )
   } else {
-    await message.lineReply(
+    await message.reply(
       `${votes.length} of the minimum ${MIN_VOTES} votes needed to close off the server from them pesky unverifieds`
     )
   }

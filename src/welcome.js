@@ -14,7 +14,7 @@ module.exports.onReady = () =>
  */
 module.exports.setWelcome = async (message, [channelId, welcomeMsg]) => {
   if (!message.channel.permissionsFor(message.member).has('MANAGE_GUILD')) {
-    await message.lineReply(
+    await message.reply(
       'why should i obey you if you cant even manage the server lmao'
     )
     return
@@ -43,8 +43,7 @@ module.exports.onJoin = async member => {
       embed: {
         description: message,
         footer: {
-          text:
-            'Note: I am just a bot, and I have been instructed to repeat this message to all users who join the server.'
+          text: 'Note: I am just a bot, and I have been instructed to repeat this message to all users who join the server.'
         }
       }
     }
@@ -57,13 +56,16 @@ module.exports.onMessage = async message => {
   const { channelId } = welcomeChannels.get(message.guild.id, {})
   if (message.channel.id === channelId && !message.author.bot) {
     if (!sentienceMsgSent.get(`${message.guild.id}-${message.author.id}`)) {
-      message.lineReplyNoMention(
-        select([
+      message.reply({
+        content: select([
           "Thanks! You'll be verified... eventually. Bureaucracy is slow.",
           "This message might be enough proof that you're sentient. You can send more if you want, just in case. I'm just a bot.",
           "Cool! I'm just a bot, so I can't tell if this means you're sentient. We'll have to wait and see."
-        ])
-      )
+        ]),
+        allowedMentions: {
+          repliedUser: false
+        }
+      })
       sentienceMsgSent
         .set(`${message.guild.id}-${message.author.id}`, true)
         .save()

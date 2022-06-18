@@ -19,13 +19,13 @@ function isPollChannel (message) {
 /** @param {Message} message */
 module.exports.pollChannel = async message => {
   if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
-    await message.lineReply(
+    await message.reply(
       "you can't even manage channels, why should i listen to you"
     )
     return
   }
   if (isPollChannel(message)) {
-    await message.lineReply(
+    await message.reply(
       select([
         'this is already a poll channel though',
         "didn't you already do `poll channel`",
@@ -40,7 +40,7 @@ module.exports.pollChannel = async message => {
 
 module.exports.notPollChannel = async message => {
   if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
-    await message.lineReply(
+    await message.reply(
       "you can't even manage channels, why should i listen to you"
     )
     return
@@ -49,7 +49,7 @@ module.exports.notPollChannel = async message => {
     pollChannels.set(message.channel.id, false).save()
     await message.react(select(ok))
   } else {
-    await message.lineReply(
+    await message.reply(
       select([
         "this isn't a poll channel though",
         "that doesn't do anything if this channel already isn't a poll channel"

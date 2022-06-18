@@ -1,7 +1,7 @@
 const select = require('./utils/select.js')
 
 module.exports.about = async message => {
-  message.lineReply(select(['hi', 'i am moofy', 'hello', 'i am me']), {
+  message.reply(select(['hi', 'i am moofy', 'hello', 'i am me']), {
     embed: {
       title: select([
         'who am i',

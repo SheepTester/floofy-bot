@@ -11,7 +11,7 @@ module.exports.ignore = async message => {
       'moofy, come back please'
     ])
     module.exports.ignoring = keyword
-    await message.lineReply(
+    await message.reply(
       select([
         `say \`${keyword}\` and i shall return. bye`,
         `i shall ignore you all now. send \`${keyword}\` to undo`,
@@ -20,7 +20,7 @@ module.exports.ignore = async message => {
       ])
     )
   } else {
-    await message.lineReply(
+    await message.reply(
       select([
         `i only bow down to <@${process.env.OWNER}>`,
         `you are not <@${process.env.OWNER}>`,

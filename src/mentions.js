@@ -59,7 +59,7 @@ module.exports.whoPinged = async (message, args) => {
       ? 'you'
       : 'them'
   if (lastMention) {
-    message.lineReplyNoMention({
+    message.reply({
       embed: {
         // This breaks if a Nitro user repeats ]( 2000 times in a message,
         // whatever
@@ -76,21 +76,31 @@ module.exports.whoPinged = async (message, args) => {
               ? "this only shows direct pings to the user, btw, it doesn't factor in role and everyone pings"
               : ''
         }
+      },
+      allowedMentions: {
+        repliedUser: false
       }
     })
   } else {
-    message.lineReplyNoMention(
-      select([
-        "hmm if someone did ping $them $here then i wasn't paying attention",
-        'whoever pinged must have pinged $them before i started tracking pings $here',
-        'i dont recall $them being pinged $here, maybe i was offline or smth'
-      ])
-        .replace('$them', them)
-        .replace('$here', channelId === message.channel.id ? 'here' : 'there') +
+    message.reply({
+      content:
+        select([
+          "hmm if someone did ping $them $here then i wasn't paying attention",
+          'whoever pinged must have pinged $them before i started tracking pings $here',
+          'i dont recall $them being pinged $here, maybe i was offline or smth'
+        ])
+          .replace('$them', them)
+          .replace(
+            '$here',
+            channelId === message.channel.id ? 'here' : 'there'
+          ) +
         (channelId === message.channel.id
           ? ` (note: if the ping was in a different channel then reply \`who pinged ${targetId} in <channel>\`)`
-          : '')
-    )
+          : ''),
+      allowedMentions: {
+        repliedUser: false
+      }
+    })
   }
 }
 
@@ -122,7 +132,7 @@ module.exports.whoPingedMe = async (
     undefined
   )
   if (lastMention) {
-    message.lineReplyNoMention({
+    message.reply({
       embed: {
         description: `<@${lastMention.author}> [pinged you](${
           lastMention.url
@@ -133,18 +143,25 @@ module.exports.whoPingedMe = async (
               ? ''
               : `tip: reply \`who pinged ${message.author.id} in ${channelId}\` to filter out role and everyone pings`
         }
+      },
+      allowedMentions: {
+        repliedUser: false
       }
     })
   } else {
-    message.lineReplyNoMention(
-      select([
-        "i don't remember you getting pinged, maybe i wasn't paying attention",
-        "hm you might've been pinged while i was offline",
-        "your ping is not in my records, maybe i wasn't tracking pings then"
-      ]) +
+    message.reply({
+      content:
+        select([
+          "i don't remember you getting pinged, maybe i wasn't paying attention",
+          "hm you might've been pinged while i was offline",
+          "your ping is not in my records, maybe i wasn't tracking pings then"
+        ]) +
         (channelId === message.channel.id
           ? ' (note: if you were pinged in a different channel then reply `who pinged me in <channel>`)'
-          : '')
-    )
+          : ''),
+      allowedMentions: {
+        repliedUser: false
+      }
+    })
   }
 }

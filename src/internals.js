@@ -23,7 +23,7 @@ function displayResults (results) {
 module.exports.exit = async message => {
   if (message.author.id === process.env.OWNER) {
     /** @type {Message} */
-    const msg = await message.lineReply(
+    const msg = await message.reply(
       select(['okay BYE', 'i go POOF now', 'weeee'])
     )
     console.log('Restarting')
@@ -40,7 +40,7 @@ module.exports.exit = async message => {
     )
     process.exit()
   } else {
-    await message.lineReply(
+    await message.reply(
       select([
         'shoo',
         `you are not <@${process.env.OWNER}>`,

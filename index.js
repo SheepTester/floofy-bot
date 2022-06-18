@@ -1,7 +1,6 @@
 require('dotenv').config()
 
-const { Client } = require('discord.js')
-require('discord-reply')
+const { Client, Intents } = require('discord.js')
 const fs = require('fs-extra')
 
 const parseCommand = require('./src/utils/parseCommand.js')
@@ -34,7 +33,7 @@ async function help (message) {
     }
     aliases.get(commandFunc).add(commandName)
   }
-  message.lineReply(
+  message.reply(
     select([
       'here you gooo',
       'taste and sample as you please',
@@ -143,9 +142,17 @@ const commands = {
   ...ownerCommands
 }
 
-const client = new Client()
+const client = new Client({
+  partials: ['CHANNEL'],
+  intents: [
+    Intents.FLAGS.GUILDS,
+    Intents.FLAGS.GUILD_MESSAGES,
+    Intents.FLAGS.GUILD_MEMBERS,
+    Intents.FLAGS.DIRECT_MESSAGES
+  ]
+})
 
-client.on('message', async message => {
+client.on('messageCreate', async message => {
   if (cmd.ignore.ignoring !== null) {
     if (
       message.author.id === process.env.OWNER &&
@@ -169,7 +176,7 @@ client.on('message', async message => {
   if (parsed && !message.author.bot) {
     const { command, arguments: args } = parsed
     if (command === '') {
-      await message.lineReply(
+      await message.reply(
         select([
           '<:ping:719277539113041930>',
           'please do not needlessly ping me',
@@ -183,7 +190,7 @@ client.on('message', async message => {
       await commands[command](message, args)
     } else {
       console.log('Unknown command:', command)
-      await message.lineReply(
+      await message.reply(
         select([
           'idk what that means but ok',
           'please do not needlessly ping me',

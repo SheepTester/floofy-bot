@@ -3,7 +3,7 @@ const select = require('./utils/select')
 module.exports.avatar = async (message, [userId = message.author.id]) => {
   const user = await message.client.users.fetch(userId).catch(() => null)
   if (user) {
-    message.lineReply(
+    message.reply(
       select([
         'too blue for my tastes',
         'why does it look so bad up close',
@@ -18,7 +18,7 @@ module.exports.avatar = async (message, [userId = message.author.id]) => {
       }
     )
   } else {
-    message.lineReply('', {
+    message.reply('', {
       embed: {
         description: select([
           `no idea who <@${userId}> is`,
