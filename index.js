@@ -12,6 +12,7 @@ const cmd = {
   welcome: require('./src/welcome.js'),
   voteLockdown: require('./src/vote-lockdown.js'),
   mentions: require('./src/mentions.js'),
+  avatar: require('./src/avatar.js'),
 
   about: require('./src/about.js'),
   ignore: require('./src/ignore-us.js'),
@@ -69,19 +70,8 @@ const ownerCommands = {
   exeunt: cmd.internals.exit
 }
 const commands = {
-  'poll channel': cmd.pollReactions.pollChannel,
-  'this is poll': cmd.pollReactions.pollChannel,
-  'this is poll channel': cmd.pollReactions.pollChannel,
-  'this is a poll channel': cmd.pollReactions.pollChannel,
-  'turn on poll channel mode which ': cmd.pollReactions.pollChannel,
-
-  'not poll channel': cmd.pollReactions.notPollChannel,
-  'not poll': cmd.pollReactions.notPollChannel,
-  'this is not a poll': cmd.pollReactions.notPollChannel,
-  'this is not a poll channel': cmd.pollReactions.notPollChannel,
-  "this isn't a poll channel": cmd.pollReactions.notPollChannel,
-  'turn off poll channel mode': cmd.pollReactions.notPollChannel,
-
+  'get raw message source of message in channel <id> with id <id>':
+    cmd.source.getSourceFlipped,
   'source of <id>': cmd.source.getSource,
   'source of <id> in <id>': cmd.source.getSource,
   'get raw message source of message <id> in this channel':
@@ -90,39 +80,58 @@ const commands = {
     cmd.source.getSource,
   'source of <id>-<id>': cmd.source.getSourceFlipped,
   'get source of <id>-<id>': cmd.source.getSourceFlipped,
-  'get raw message source of message in channel <id> with id <id>':
-    cmd.source.getSourceFlipped,
 
   'how old is <id>': cmd.source.getDate,
   'when was <id> created': cmd.source.getDate,
   'when did i join discord': cmd.source.getDate,
   'how old am i': cmd.source.getDate,
 
+  'who pinged user <id> in channel <id>': cmd.mentions.whoPinged,
+  'who pinged everyone in channel <id>': cmd.mentions.whoPinged,
   'who pinged <id>': cmd.mentions.whoPinged,
   'who pinged <id> in <id>': cmd.mentions.whoPinged,
   'who pinged role <id> here': cmd.mentions.whoPinged,
-  'who pinged user <id> in channel <id>': cmd.mentions.whoPinged,
   'who pinged everyone': cmd.mentions.whoPinged,
   'who pinged everyone here': cmd.mentions.whoPinged,
   'who pinged everyone in <id>': cmd.mentions.whoPinged,
-  'who pinged everyone in channel <id>': cmd.mentions.whoPinged,
 
-  'who pinged me': cmd.mentions.whoPingedMe,
-  'who pinged': cmd.mentions.whoPingedMe,
   'who pinged me in channel <id>': cmd.mentions.whoPingedMe,
   'who pinged me in <id>': cmd.mentions.whoPingedMe,
+  'who pinged me': cmd.mentions.whoPingedMe,
+  'who pinged': cmd.mentions.whoPingedMe,
 
-  'welcome new folk in <id> with:': cmd.welcome.setWelcome,
+  'get avatar of user <id>': cmd.avatar.avatar,
+  'avatar of <id>': cmd.avatar.avatar,
+  'pfp of <id>': cmd.avatar.avatar,
+  'profile picture of <id>': cmd.avatar.avatar,
+  'my pfp': cmd.avatar.avatar,
+  'whats my pfp': cmd.avatar.avatar,
+
+  'turn on poll channel mode which auto-adds reactions to messages':
+    cmd.pollReactions.pollChannel,
+  'poll channel': cmd.pollReactions.pollChannel,
+  'this is poll': cmd.pollReactions.pollChannel,
+  'this is poll channel': cmd.pollReactions.pollChannel,
+  'this is a poll channel': cmd.pollReactions.pollChannel,
+
+  'turn off poll channel mode': cmd.pollReactions.notPollChannel,
+  'not poll channel': cmd.pollReactions.notPollChannel,
+  'not poll': cmd.pollReactions.notPollChannel,
+  'this is not a poll': cmd.pollReactions.notPollChannel,
+  'this is not a poll channel': cmd.pollReactions.notPollChannel,
+  "this isn't a poll channel": cmd.pollReactions.notPollChannel,
+
   'when a user joins the server send a message in channel <id> containing the following starting on the next line:':
     cmd.welcome.setWelcome,
+  'welcome new folk in <id> with:': cmd.welcome.setWelcome,
 
-  'allow people to lock down <id>': cmd.voteLockdown.setLockdownCategory,
   'set lockdown category id to <id>': cmd.voteLockdown.setLockdownCategory,
+  'allow people to lock down <id>': cmd.voteLockdown.setLockdownCategory,
 
-  'close the gates': cmd.voteLockdown.voteLockdown,
-  'vote for lockdown': cmd.voteLockdown.voteLockdown,
   "deny the unverified access to the commoners' channels":
     cmd.voteLockdown.voteLockdown,
+  'close the gates': cmd.voteLockdown.voteLockdown,
+  'vote for lockdown': cmd.voteLockdown.voteLockdown,
 
   about: cmd.about.about,
   'who are you': cmd.about.about,
@@ -173,7 +182,7 @@ client.on('message', async message => {
     } else if (commands[command]) {
       await commands[command](message, args)
     } else {
-      console.log(command)
+      console.log('Unknown command:', command)
       await message.lineReply(
         select([
           'idk what that means but ok',
@@ -223,9 +232,14 @@ try {
   const log = new EventLogger('Floofy noises')
 
   // These errors show in Event Viewer
+  const origLog = console.log
+  console.log = (...data) => {
+    log.info(data.join(' '))
+    origLog(data)
+  }
   const origErr = console.error
   console.error = error => {
-    log.error(error.stack)
+    log.error(`${error?.stack}`)
     origErr(error)
   }
 } catch {}

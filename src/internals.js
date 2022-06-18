@@ -26,6 +26,7 @@ module.exports.exit = async message => {
     const msg = await message.lineReply(
       select(['okay BYE', 'i go POOF now', 'weeee'])
     )
+    console.log('Restarting')
     const gitPullResult = await execute('git pull')
     await msg.edit(displayResults([gitPullResult.stdout, gitPullResult.stderr]))
     const npmInstallResult = await execute('npm install')
