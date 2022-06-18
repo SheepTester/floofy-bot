@@ -57,11 +57,18 @@ module.exports.onMessage = async message => {
   if (message.channel.id === channelId && !message.author.bot) {
     if (!sentienceMsgSent.get(`${message.guild.id}-${message.author.id}`)) {
       message.reply({
-        content: select([
-          "Thanks! You'll be verified... eventually. Bureaucracy is slow.",
-          "This message might be enough proof that you're sentient. You can send more if you want, just in case. I'm just a bot.",
-          "Cool! I'm just a bot, so I can't tell if this means you're sentient. We'll have to wait and see."
-        ]),
+        content:
+          message.content.length > 15
+            ? select([
+                "Thanks! You'll be verified... eventually. Bureaucracy is slow.",
+                "This message might be enough proof that you're sentient. You can send more if you want, just in case. I'm just a bot.",
+                "Cool! I'm just a bot, so I can't tell if this means you're sentient. We'll have to wait and see."
+              ])
+            : select([
+                "That's a bit short of a message. Try sending more to prove that you're not a bot, and you'll be verified eventually.",
+                "Say more. Couldn't a bot have said that as well? Once you're prove you're human you'll eventually be verified.",
+                'The more you write, the better. Show me your definitely human imagination! If your messages are satisfactorily humanlike, you will eventually get verified.'
+              ]),
         allowedMentions: {
           repliedUser: false
         }
