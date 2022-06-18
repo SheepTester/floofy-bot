@@ -60,23 +60,25 @@ module.exports.whoPinged = async (message, args) => {
       : 'them'
   if (lastMention) {
     message.reply({
-      embed: {
-        // This breaks if a Nitro user repeats ]( 2000 times in a message,
-        // whatever
-        description: `<@${lastMention.author}> pinged ${
-          targetId === 'everyone'
-            ? '@everyone'
-            : `<@${lastMention.role ? '&' : ''}${targetId}>`
-        } ([link to message](${
-          lastMention.url
-        })):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`,
-        footer: {
-          text:
-            !lastMention.role && targetId !== 'everyone'
-              ? "this only shows direct pings to the user, btw, it doesn't factor in role and everyone pings"
-              : ''
+      embeds: [
+        {
+          // This breaks if a Nitro user repeats ]( 2000 times in a message,
+          // whatever
+          description: `<@${lastMention.author}> pinged ${
+            targetId === 'everyone'
+              ? '@everyone'
+              : `<@${lastMention.role ? '&' : ''}${targetId}>`
+          } ([link to message](${
+            lastMention.url
+          })):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`,
+          footer: {
+            text:
+              !lastMention.role && targetId !== 'everyone'
+                ? "this only shows direct pings to the user, btw, it doesn't factor in role and everyone pings"
+                : ''
+          }
         }
-      },
+      ],
       allowedMentions: {
         repliedUser: false
       }
@@ -133,17 +135,19 @@ module.exports.whoPingedMe = async (
   )
   if (lastMention) {
     message.reply({
-      embed: {
-        description: `<@${lastMention.author}> [pinged you](${
-          lastMention.url
-        }):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`,
-        footer: {
-          text:
-            lastMention === userMention
-              ? ''
-              : `tip: reply \`who pinged ${message.author.id} in ${channelId}\` to filter out role and everyone pings`
+      embeds: [
+        {
+          description: `<@${lastMention.author}> [pinged you](${
+            lastMention.url
+          }):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`,
+          footer: {
+            text:
+              lastMention === userMention
+                ? ''
+                : `tip: reply \`who pinged ${message.author.id} in ${channelId}\` to filter out role and everyone pings`
+          }
         }
-      },
+      ],
       allowedMentions: {
         repliedUser: false
       }

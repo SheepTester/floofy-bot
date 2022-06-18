@@ -20,22 +20,27 @@ module.exports.getSource = async (
   if (!msg) {
     return message.reply(`can't get the message with id ${messageId}`)
   }
-  return message.reply(
-    select(['here you go', 'i n s p e c t', 'hmm']),
+  const useFile =
+    msg.content.length > 1800 ||
+    msg.content.includes('```') ||
+    msg.content.includes('<a:') ||
+    msg.content.includes('<:')
+  return message.reply({
+    content: select(['here you go', 'i n s p e c t', 'hmm']),
     // If the message might be too long for an embed or can't be contained in a
     // code block or has custom emoji, upload a text file
-    msg.content.length > 1800 ||
-      msg.content.includes('```') ||
-      msg.content.includes('<a:') ||
-      msg.content.includes('<:')
-      ? new MessageAttachment(Buffer.from(msg.content), 'message.txt')
-      : {
-          embed: {
+    files: useFile
+      ? [new MessageAttachment(Buffer.from(msg.content), 'message.txt')]
+      : undefined,
+    embeds: useFile
+      ? undefined
+      : [
+          {
             title: select(['conTENT', 'source', 'wow', 'very cool']),
             description: `\`\`\`md\n${msg.content}\n\`\`\``
           }
-        }
-  )
+        ]
+  })
 }
 
 module.exports.getSourceFlipped = async (message, [channelId, messageId]) =>

@@ -32,22 +32,22 @@ module.exports.onJoin = async member => {
   if (!channelId) return
   const channel = member.guild.channels.cache.get(channelId)
   if (!channel) return
-  await channel.send(
-    select([
+  await channel.send({
+    content: select([
       'Hi, {USER}; please read this:',
       'Welcome, {USER}! Read this:',
       "Hey, {USER}! Let's see if you can read.",
       '{USER}, I have been told to show you this.'
     ]).replace('{USER}', member),
-    {
-      embed: {
+    embeds: [
+      {
         description: message,
         footer: {
           text: 'Note: I am just a bot, and I have been instructed to repeat this message to all users who join the server.'
         }
       }
-    }
-  )
+    ]
+  })
 }
 
 /** @param {Message} message */

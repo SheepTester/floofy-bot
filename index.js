@@ -33,16 +33,16 @@ async function help (message) {
     }
     aliases.get(commandFunc).add(commandName)
   }
-  message.reply(
-    select([
+  message.reply({
+    content: select([
       'here you gooo',
       'taste and sample as you please',
       'please read carefully',
       'the aliases sometimes describe what the command does, sometimes',
       'helped'
     ]),
-    {
-      embed: {
+    embeds: [
+      {
         title: select([
           'nice, some commands',
           'commands and aliases',
@@ -61,8 +61,8 @@ async function help (message) {
           inline: true
         }))
       }
-    }
-  )
+    ]
+  })
 }
 const ownerCommands = {
   'ignore us please': cmd.ignore.ignore,
