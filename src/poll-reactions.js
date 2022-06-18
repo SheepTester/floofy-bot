@@ -15,6 +15,9 @@ module.exports.onReady = pollChannels.read
 function isPollChannel (message) {
   return pollChannels.get(message.channel.id, false)
 }
+function isPoll (message) {
+  return isPollChannel(message) || message.content.includes('(this is a poll)')
+}
 
 /** @param {Message} message */
 module.exports.pollChannel = async message => {
@@ -59,7 +62,7 @@ module.exports.notPollChannel = async message => {
 }
 
 module.exports.onMessage = async message => {
-  if (isPollChannel(message)) {
+  if (isPoll(message)) {
     const emoji = message.content.match(emojiRegex) || []
     if (emoji.length === 0) {
       await Promise.all([message.react('👍'), message.react('👎')]).catch(
@@ -72,7 +75,7 @@ module.exports.onMessage = async message => {
 }
 
 module.exports.onEdit = async newMessage => {
-  if (isPollChannel(newMessage)) {
+  if (isPoll(newMessage)) {
     const emoji = newMessage.content.match(emojiRegex) || []
     if (emoji.length > 0) {
       // TODO: Do not re-add already-reacted emoji for speedier reaction
