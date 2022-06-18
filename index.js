@@ -83,14 +83,14 @@ const commands = {
   'turn off poll channel mode': cmd.pollReactions.notPollChannel,
 
   'source of <id>': cmd.source.getSource,
-  'cmd.source of <id> in <id>': cmd.source.getSource,
-  'get raw message cmd.source of message <id> in this channel':
+  'source of <id> in <id>': cmd.source.getSource,
+  'get raw message source of message <id> in this channel':
     cmd.source.getSource,
-  'get raw message cmd.source of message <id> in channel <id>':
+  'get raw message source of message <id> in channel <id>':
     cmd.source.getSource,
-  'cmd.source of <id>-<id>': cmd.source.getSourceFlipped,
-  'get cmd.source of <id>-<id>': cmd.source.getSourceFlipped,
-  'get raw message cmd.source of message in channel <id> with id <id>':
+  'source of <id>-<id>': cmd.source.getSourceFlipped,
+  'get source of <id>-<id>': cmd.source.getSourceFlipped,
+  'get raw message source of message in channel <id> with id <id>':
     cmd.source.getSourceFlipped,
 
   'how old is <id>': cmd.source.getDate,
@@ -158,7 +158,7 @@ client.on('message', async message => {
   const parsed = parseCommand(message)
   // If ping
   if (parsed && !message.author.bot) {
-    const { command, arguments } = parsed
+    const { command, arguments: args } = parsed
     if (command === '') {
       await message.lineReply(
         select([
@@ -171,7 +171,7 @@ client.on('message', async message => {
         ])
       )
     } else if (commands[command]) {
-      await commands[command](message, arguments)
+      await commands[command](message, args)
     } else {
       console.log(command)
       await message.lineReply(
@@ -217,3 +217,15 @@ fs.ensureDir('./data/')
     console.error(err)
     process.exit(1)
   })
+
+try {
+  const { EventLogger } = require('node-windows')
+  const log = new EventLogger('Floofy noises')
+
+  // These errors show in Event Viewer
+  const origErr = console.error
+  console.error = error => {
+    log.error(error.stack)
+    origErr(error)
+  }
+} catch {}
