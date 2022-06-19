@@ -1,5 +1,22 @@
 const regexCache = {}
 
+/** Finds the first colon not in a custom emoji */
+function findColon (string) {
+  let index = string.indexOf(':')
+  while (index !== -1) {
+    if (
+      !(
+        string[index - 1] === '<' ||
+        (string[index - 1] === 'a' && string[index - 2] === '<')
+      )
+    ) {
+      return index + 1
+    }
+    index = string.indexOf(':', index + 1)
+  }
+  return string.length
+}
+
 /** Uses bot mentions as a prefix */
 module.exports = function parseCommand (message) {
   const bot = message.client.user
@@ -7,9 +24,10 @@ module.exports = function parseCommand (message) {
     regexCache[bot.id] = new RegExp(`<@!?${message.client.user.id}>`, 'g')
   }
   if (message.mentions.has(bot) || regexCache[bot.id].test(message.content)) {
-    const arguments = []
-    const [rawCommand, ...lines] = message.content.split('\n')
-    const command = rawCommand
+    const args = []
+    const colon = findColon(message.content)
+    const command = message.content
+      .slice(0, colon)
       .replace(regexCache[bot.id], '')
       .trim()
       .replace(/\s+/g, ' ')
@@ -19,17 +37,17 @@ module.exports = function parseCommand (message) {
         /<(?:[#@][!&]?|a?:\w+:)(\d+)>|\d{15,20}/g,
         (match, mentionId) => {
           const id = match[0] === '<' ? mentionId : match
-          arguments.push(id)
+          args.push(id)
           return '<id>'
         }
       )
       .toLowerCase()
-    if (lines.length > 0) {
-      arguments.push(lines.join('\n'))
+    if (colon < message.content.length) {
+      args.push(message.content.slice(colon).trim())
     }
     return {
       command,
-      arguments
+      args
     }
   } else {
     return null

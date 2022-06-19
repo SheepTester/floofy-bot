@@ -12,6 +12,7 @@ const cmd = {
   voteLockdown: require('./src/vote-lockdown.js'),
   mentions: require('./src/mentions.js'),
   avatar: require('./src/avatar.js'),
+  minecraft: require('./src/minecraft.js'),
 
   about: require('./src/about.js'),
   ignore: require('./src/ignore-us.js'),
@@ -106,6 +107,9 @@ const commands = {
   'my pfp': cmd.avatar.avatar,
   'whats my pfp': cmd.avatar.avatar,
 
+  'status:': cmd.minecraft.serverStatus,
+  'who is on the minecraft server:': cmd.minecraft.serverStatus,
+
   'this is a poll channel': cmd.pollReactions.pollChannel,
   'turn on poll channel mode which auto-adds reactions to messages':
     cmd.pollReactions.pollChannel,
@@ -121,7 +125,7 @@ const commands = {
   "this isn't a poll channel": cmd.pollReactions.notPollChannel,
 
   'welcome new folk in <id> with:': cmd.welcome.setWelcome,
-  'when a user joins the server send a message in channel <id> containing the following starting on the next line:':
+  'when a user joins the server send a message in channel <id> containing the following:':
     cmd.welcome.setWelcome,
 
   'allow people to lock down <id>': cmd.voteLockdown.setLockdownCategory,
@@ -174,7 +178,7 @@ client.on('messageCreate', async message => {
   const parsed = parseCommand(message)
   // If ping
   if (parsed && !message.author.bot) {
-    const { command, arguments: args } = parsed
+    const { command, args } = parsed
     if (command === '') {
       await message.reply(
         select([
