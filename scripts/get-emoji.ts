@@ -62,15 +62,12 @@ async function onEmojiData (
       ])
     )
     .sort((a, b) => b.length - a.length)
-  await Deno.writeTextFile(
-    './src/emoji.json',
-    JSON.stringify(surrogates, null, '\t').replaceAll('\t', '') + '\n'
-  )
+  console.log(JSON.stringify(surrogates, null, '\t').replaceAll('\t', ''))
 
   // Longest emoji names because why not?
   if (preview > 0) {
     function displayNames (names: { name: string; surrogates: string }[]) {
-      console.log(
+      console.error(
         names
           .sort((a, b) => b.name.length - a.name.length)
           .slice(0, preview)
@@ -83,7 +80,7 @@ async function onEmojiData (
         emoji.map(({ names, surrogates }) => ({ name: names[0], surrogates }))
       )
     )
-    console.log('With variants')
+    console.error('With variants')
     displayNames(
       Object.values(emojiData).flatMap(emoji =>
         emoji.flatMap(({ names, surrogates }) =>
@@ -91,7 +88,7 @@ async function onEmojiData (
         )
       )
     )
-    console.log('With tones')
+    console.error('With tones')
     displayNames(
       Object.values(emojiData).flatMap(emoji =>
         emoji.flatMap(({ names, surrogates, diversityChildren = [] }) => [
