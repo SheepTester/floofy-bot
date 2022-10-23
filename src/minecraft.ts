@@ -1,7 +1,20 @@
-const { Client, PacketWriter, State } = require('mcproto')
-const select = require('./utils/select.js')
+import { Message } from 'discord.js'
+import { Client, PacketWriter, State } from 'mcproto'
+import select from './utils/select.js'
 
-async function getServerStatus (address) {
+type Player = {
+  name: string
+  id: string
+}
+
+type ServerStatus = {
+  online: number
+  max: number
+  players: Player[]
+  version: string
+}
+
+async function getServerStatus (address: string): Promise<ServerStatus> {
   const [host, port = '25565'] = address.split(':')
   const client = await Client.connect(host, +port)
   client.send(
@@ -23,10 +36,10 @@ async function getServerStatus (address) {
   return { online, max, players, version }
 }
 
-module.exports.serverStatus = async (message, [address]) => {
+export async function serverStatus (message: Message, [address]: string[]) {
   try {
     const { online, max, players, version } = await getServerStatus(address)
-    message.reply({
+    await message.reply({
       content: select([
         'fomo time?',
         "let's see who's gaming",
@@ -64,9 +77,13 @@ module.exports.serverStatus = async (message, [address]) => {
       ]
     })
   } catch (error) {
-    message.reply({
+    await message.reply({
       content: select(['problem!', "can't connect!", 'oopsie doopsie']),
-      embeds: [{ description: error.message }]
+      embeds: [
+        {
+          description: error instanceof Error ? error.message : String(error)
+        }
+      ]
     })
   }
 }

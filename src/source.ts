@@ -1,31 +1,34 @@
-const { MessageAttachment } = require('discord.js')
-const select = require('./utils/select.js')
+import { Message, MessageAttachment } from 'discord.js'
+import select from './utils/select.js'
 
-module.exports.getSource = async (
-  message,
-  [messageId, channelId = message.channel.id]
-) => {
+export async function getSource (
+  message: Message,
+  [messageId, channelId = message.channel.id]: string[]
+): Promise<void> {
   const channel = await message.client.channels
     .fetch(channelId)
     .catch(() => null)
   if (!channel) {
-    return message.reply(`can't get channel <#${channelId}>`)
+    await message.reply(`can't get channel <#${channelId}>`)
+    return
   }
   if (!channel.isText()) {
-    return message.reply(
+    await message.reply(
       `<#${channelId}> is not a channel with messages you fool`
     )
+    return
   }
   const msg = await channel.messages.fetch(messageId).catch(() => null)
   if (!msg) {
-    return message.reply(`can't get the message with id ${messageId}`)
+    await message.reply(`can't get the message with id ${messageId}`)
+    return
   }
   const useFile =
     msg.content.length > 1800 ||
     msg.content.includes('```') ||
     msg.content.includes('<a:') ||
     msg.content.includes('<:')
-  return message.reply({
+  await message.reply({
     content: select(['here you go', 'i n s p e c t', 'hmm']),
     // If the message might be too long for an embed or can't be contained in a
     // code block or has custom emoji, upload a text file
@@ -50,12 +53,17 @@ module.exports.getSource = async (
   })
 }
 
-module.exports.getSourceFlipped = async (message, [channelId, messageId]) =>
-  module.exports.getSource(message, [messageId, channelId])
+export const getSourceFlipped = async (
+  message: Message,
+  [channelId, messageId]: string[]
+) => getSource(message, [messageId, channelId])
 
-module.exports.getDate = async (message, [id = message.author.id]) => {
+export async function getDate (
+  message: Message,
+  [id = message.author.id]: string[]
+): Promise<void> {
   const timestamp = (BigInt(id) >> 22n) / 1000n + 1420070400n
-  message.reply(
+  await message.reply(
     select([
       "'twas made %F (%R)",
       'it was created on %F, %R',

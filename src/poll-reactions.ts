@@ -1,27 +1,33 @@
-const { Message } = require('discord.js')
-const emojiList = require('./emoji.json')
-const CachedMap = require('./utils/CachedMap.js')
-const ok = require('./utils/ok.js')
-const select = require('./utils/select.js')
+import { DMChannel, Message } from 'discord.js'
+import emojiList from './emoji.json'
+import CachedMap from './utils/CachedMap.js'
+import ok from './utils/ok.js'
+import select from './utils/select.js'
 
 const emojiRegex = new RegExp(
   `<a?:\\w+:\\d+>|${emojiList.join('|').replace(/[+*]/g, m => '\\' + m)}`,
   'g'
 )
 
-const pollChannels = new CachedMap('./data/poll-reactions.json')
-module.exports.onReady = pollChannels.read
+const pollChannels = new CachedMap<boolean>('./data/poll-reactions.json')
+export const onReady = pollChannels.read
 
-function isPollChannel (message) {
+function isPollChannel (message: Message): boolean {
   return pollChannels.get(message.channel.id, false)
 }
-function isPoll (message) {
+function isPoll (message: Message): boolean {
   return isPollChannel(message) || message.content.includes('(this is a poll)')
 }
 
-/** @param {Message} message */
-module.exports.pollChannel = async message => {
-  if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
+export async function pollChannel (message: Message): Promise<void> {
+  if (
+    message.channel instanceof DMChannel ||
+    message.channel.lastMessageId === undefined
+  ) {
+    await message.reply("who're you polling in here just me and you??")
+    return
+  }
+  if (!message.channel.permissionsFor(message.member!).has('MANAGE_CHANNELS')) {
     await message.reply(
       "you can't even manage channels, why should i listen to you"
     )
@@ -41,8 +47,15 @@ module.exports.pollChannel = async message => {
   }
 }
 
-module.exports.notPollChannel = async message => {
-  if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
+export async function notPollChannel (message: Message): Promise<void> {
+  if (
+    message.channel instanceof DMChannel ||
+    message.channel.lastMessageId === undefined
+  ) {
+    await message.reply("who're you polling in here just me and you??")
+    return
+  }
+  if (!message.channel.permissionsFor(message.member!).has('MANAGE_CHANNELS')) {
     await message.reply(
       "you can't even manage channels, why should i listen to you"
     )
@@ -61,7 +74,7 @@ module.exports.notPollChannel = async message => {
   }
 }
 
-module.exports.onMessage = async message => {
+export async function onMessage (message: Message): Promise<void> {
   if (isPoll(message)) {
     const emoji = message.content.match(emojiRegex) || []
     if (emoji.length === 0) {
@@ -74,7 +87,7 @@ module.exports.onMessage = async message => {
   }
 }
 
-module.exports.onEdit = async newMessage => {
+export async function onEdit (newMessage: Message): Promise<void> {
   if (isPoll(newMessage)) {
     const emoji = newMessage.content.match(emojiRegex) || []
     if (emoji.length > 0) {

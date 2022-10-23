@@ -1,9 +1,13 @@
-const select = require('./utils/select')
+import { Message } from 'discord.js'
+import select from './utils/select'
 
-module.exports.avatar = async (message, [userId = message.author.id]) => {
+export async function avatar (
+  message: Message,
+  [userId = message.author.id]: string[]
+): Promise<void> {
   const user = await message.client.users.fetch(userId).catch(() => null)
   if (user) {
-    message.reply({
+    await message.reply({
       content: select([
         'too blue for my tastes',
         'why does it look so bad up close',
@@ -12,13 +16,13 @@ module.exports.avatar = async (message, [userId = message.author.id]) => {
       embeds: [
         {
           image: {
-            url: user.displayAvatarURL({ extension: 'png', size: 4096 })
+            url: user.displayAvatarURL({ format: 'png', size: 4096 })
           }
         }
       ]
     })
   } else {
-    message.reply({
+    await message.reply({
       embeds: [
         {
           description: select([

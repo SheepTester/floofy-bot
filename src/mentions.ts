@@ -1,21 +1,19 @@
-const { Message } = require('discord.js')
-const CachedMap = require('./utils/CachedMap.js')
-const select = require('./utils/select.js')
+import { Message } from 'discord.js'
+import CachedMap from './utils/CachedMap.js'
+import select from './utils/select.js'
 
-/**
- * @typedef {object} LastPing
- * @property {string} author
- * @property {string} content
- * @property {string} url
- * @property {boolean} [role]
- */
+type LastPing = {
+  author: string
+  content: string
+  url: string
+  role?: boolean
+}
 
-/** @type {CachedMap<LastPing>} */
-const mentionCache = new CachedMap('./data/mentions.json')
-module.exports.onReady = mentionCache.read
+const mentionCache = new CachedMap<LastPing>('./data/mentions.json')
+export const onReady = mentionCache.read
 
 /** @param {Message} message */
-module.exports.onMessage = async message => {
+export async function onMessage (message: Message): Promise<void> {
   const {
     channel: { id: channelId },
     mentions
@@ -33,7 +31,7 @@ module.exports.onMessage = async message => {
       mentionCache.set(`${channelId}-${roleId}`, { ...msg, role: true })
     }
     // Ignore user pings from this bot
-    if (message.author.id !== message.client.user.id) {
+    if (message.author.id !== message.client.user!.id) {
       for (const userId of mentions.users.keys()) {
         mentionCache.set(`${channelId}-${userId}`, msg)
       }
@@ -42,11 +40,10 @@ module.exports.onMessage = async message => {
   }
 }
 
-/**
- * @param {Message} message
- * @param {string[]} args
- */
-module.exports.whoPinged = async (message, args) => {
+export async function whoPinged (
+  message: Message,
+  args: string[]
+): Promise<void> {
   const [targetId, channelId = message.channel.id] =
     args.length < 2 && message.content.includes('everyone')
       ? ['everyone', args[0]]
@@ -59,7 +56,7 @@ module.exports.whoPinged = async (message, args) => {
       ? 'you'
       : 'them'
   if (lastMention) {
-    message.reply({
+    await message.reply({
       embeds: [
         {
           // This breaks if a Nitro user repeats ]( 2000 times in a message,
@@ -84,7 +81,7 @@ module.exports.whoPinged = async (message, args) => {
       }
     })
   } else {
-    message.reply({
+    await message.reply({
       content:
         select([
           "hmm if someone did ping $them $here then i wasn't paying attention",
@@ -106,14 +103,10 @@ module.exports.whoPinged = async (message, args) => {
   }
 }
 
-/**
- * @param {Message} message
- * @param {string[]} arguments
- */
-module.exports.whoPingedMe = async (
-  message,
-  [channelId = message.channel.id]
-) => {
+export async function whoPingedMe (
+  message: Message,
+  [channelId = message.channel.id]: string[]
+): Promise<void> {
   const userMention = mentionCache.get(`${channelId}-${message.author.id}`)
   const possibilities = [mentionCache.get(`${channelId}-everyone`), userMention]
   if (message.member) {
@@ -134,7 +127,7 @@ module.exports.whoPingedMe = async (
     undefined
   )
   if (lastMention) {
-    message.reply({
+    await message.reply({
       embeds: [
         {
           description: `<@${lastMention.author}> [pinged you](${
@@ -153,7 +146,7 @@ module.exports.whoPingedMe = async (
       }
     })
   } else {
-    message.reply({
+    await message.reply({
       content:
         select([
           "i don't remember you getting pinged, maybe i wasn't paying attention",

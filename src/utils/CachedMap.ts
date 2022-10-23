@@ -1,53 +1,39 @@
-const fs = require('fs-extra')
+import fs from 'fs-extra'
 
-/**
- * @template T
- */
-module.exports = class CachedMap {
-  #path
-  /** @type {T} */
-  #object
+export default class CachedMap<T> {
+  #path: string
+  #object: Record<string, T> = {}
 
-  /**
-   * @param {string} path
-   */
-  constructor (path) {
+  constructor (path: string) {
     this.#path = path
   }
 
-  read = async () => {
+  read = async (): Promise<void> => {
     this.#object = await fs
       .readFile(this.#path, 'utf-8')
       .then(json => (json === '' ? {} : JSON.parse(json)))
       .catch(err => (err.code === 'ENOENT' ? {} : Promise.reject(err)))
   }
 
-  /**
-   * @param {string} id
-   * @returns {boolean}
-   */
-  has (id) {
+  has (id: string): boolean {
     return Object.prototype.hasOwnProperty.call(this.#object, id)
   }
 
-  /**
-   * @type {<V = undefined>(id: string, defaultValue: V) => T | V}
-   */
-  get (id, defaultValue = undefined) {
+  get (id: string | undefined): T | undefined
+  get (id: string | undefined, defaultValue: T): T
+  get (id: string | undefined, defaultValue?: T): T | undefined {
+    if (id === undefined) {
+      return defaultValue
+    }
     return this.has(id) ? this.#object[id] : defaultValue
   }
 
-  /**
-   * @param {string} id
-   * @param {T} value
-   * @returns {this}
-   */
-  set (id, value) {
+  set (id: string, value: T): this {
     this.#object[id] = value
     return this
   }
 
-  async save () {
+  async save (): Promise<void> {
     await fs.writeFile(this.#path, JSON.stringify(this.#object, null, '\t'))
   }
 }

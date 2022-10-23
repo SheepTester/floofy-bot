@@ -1,8 +1,9 @@
-const select = require('./utils/select.js')
+import { Message } from 'discord.js'
+import select from './utils/select.js'
 
-module.exports.ignoring = null
+export let ignoring: string | null = null
 
-module.exports.ignore = async message => {
+export async function ignore (message: Message): Promise<void> {
   if (message.author.id === process.env.OWNER) {
     const keyword = select([
       'moofy, revive!',
@@ -10,7 +11,7 @@ module.exports.ignore = async message => {
       'moofy, resuscitate.',
       'moofy, come back please'
     ])
-    module.exports.ignoring = keyword
+    ignoring = keyword
     await message.reply(
       select([
         `say \`${keyword}\` and i shall return. bye`,

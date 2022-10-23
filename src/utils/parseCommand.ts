@@ -1,7 +1,9 @@
-const regexCache = {}
+import { Message } from 'discord.js'
+
+const regexCache: Record<string, RegExp> = {}
 
 /** Finds the first colon not in a custom emoji */
-function findColon (string) {
+function findColon (string: string): number {
   let index = string.indexOf(':')
   while (index !== -1) {
     if (
@@ -17,11 +19,16 @@ function findColon (string) {
   return string.length
 }
 
+export type ParsedCommand = {
+  command: string
+  args: string[]
+}
+
 /** Uses bot mentions as a prefix */
-module.exports = function parseCommand (message) {
-  const bot = message.client.user
+export default function parseCommand (message: Message): ParsedCommand | null {
+  const bot = message.client.user!
   if (!regexCache[bot.id]) {
-    regexCache[bot.id] = new RegExp(`<@!?${message.client.user.id}>`, 'g')
+    regexCache[bot.id] = new RegExp(`<@!?${message.client.user!.id}>`, 'g')
   }
   if (message.mentions.has(bot) || regexCache[bot.id].test(message.content)) {
     const args = []

@@ -1,19 +1,35 @@
-const { Message, GuildMember } = require('discord.js')
-const CachedMap = require('./utils/CachedMap')
-const ok = require('./utils/ok.js')
-const select = require('./utils/select')
+import { DMChannel, GuildMember, Message, TextChannel } from 'discord.js'
 
-const welcomeChannels = new CachedMap('./data/welcome-channels.json')
-const sentienceMsgSent = new CachedMap('./data/sentience-msg-sent.json')
-module.exports.onReady = () =>
+import CachedMap from './utils/CachedMap'
+import ok from './utils/ok.js'
+import select from './utils/select'
+
+type WelcomeChannel = {
+  channelId: string
+  message: string
+}
+
+const welcomeChannels = new CachedMap<WelcomeChannel>(
+  './data/welcome-channels.json'
+)
+const sentienceMsgSent = new CachedMap<boolean>(
+  './data/sentience-msg-sent.json'
+)
+export const onReady = () =>
   Promise.all([welcomeChannels.read(), sentienceMsgSent.read()])
 
-/**
- * @param {Message} message
- * @param {string[]} arguments
- */
-module.exports.setWelcome = async (message, [channelId, welcomeMsg]) => {
-  if (!message.channel.permissionsFor(message.member).has('MANAGE_GUILD')) {
+export async function setWelcome (
+  message: Message,
+  [channelId, welcomeMsg]: string[]
+): Promise<void> {
+  if (
+    message.channel instanceof DMChannel ||
+    message.channel.lastMessageId === undefined
+  ) {
+    await message.reply('no dms')
+    return
+  }
+  if (!message.channel.permissionsFor(message.member!).has('MANAGE_GUILD')) {
     await message.reply(
       'why should i obey you if you cant even manage the server lmao'
     )
@@ -21,24 +37,23 @@ module.exports.setWelcome = async (message, [channelId, welcomeMsg]) => {
   }
 
   welcomeChannels
-    .set(message.guild.id, { channelId, message: welcomeMsg })
+    .set(message.guild!.id, { channelId, message: welcomeMsg })
     .save()
   await message.react(select(ok))
 }
 
-/** @param {GuildMember} member */
-module.exports.onJoin = async member => {
-  const { channelId, message } = welcomeChannels.get(member.guild.id, {})
+export async function onJoin (member: GuildMember): Promise<void> {
+  const { channelId, message } = welcomeChannels.get(member.guild.id) ?? {}
   if (!channelId) return
   const channel = member.guild.channels.cache.get(channelId)
-  if (!channel) return
+  if (!(channel instanceof TextChannel)) return
   await channel.send({
     content: select([
       'Hi, {USER}; please read this:',
       'Welcome, {USER}! Read this:',
       "Hey, {USER}! Let's see if you can read.",
       '{USER}, I have been told to show you this.'
-    ]).replace('{USER}', member),
+    ]).replace('{USER}', member.toString()),
     embeds: [
       {
         description: message,
@@ -50,13 +65,12 @@ module.exports.onJoin = async member => {
   })
 }
 
-/** @param {Message} message */
-module.exports.onMessage = async message => {
+export async function onMessage (message: Message): Promise<void> {
   if (!message.guild) return
-  const { channelId } = welcomeChannels.get(message.guild.id, {})
+  const { channelId } = welcomeChannels.get(message.guild.id) ?? {}
   if (message.channel.id === channelId && !message.author.bot) {
     if (!sentienceMsgSent.get(`${message.guild.id}-${message.author.id}`)) {
-      message.reply({
+      await message.reply({
         content:
           message.content.length > 15
             ? select([

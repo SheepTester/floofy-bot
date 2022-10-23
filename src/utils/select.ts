@@ -1,4 +1,4 @@
 /** Randomly select from a list */
-module.exports = function select (list) {
+export default function select<T> (list: T[]): T {
   return list[Math.floor(Math.random() * list.length)]
 }

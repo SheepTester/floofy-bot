@@ -1,7 +1,8 @@
-const select = require('./utils/select.js')
+import { Message } from 'discord.js'
+import select from './utils/select.js'
 
-module.exports.about = async message => {
-  message.reply({
+export async function about (message: Message): Promise<void> {
+  await message.reply({
     content: select(['hi', 'i am moofy', 'hello', 'i am me']),
     embeds: [
       {

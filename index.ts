@@ -1,26 +1,16 @@
 require('dotenv').config()
 
-const { Client, Intents } = require('discord.js')
-const fs = require('fs-extra')
+import { Client, Intents, Message } from 'discord.js'
+import fs from 'fs-extra'
 
-const parseCommand = require('./src/utils/parseCommand.js')
-const select = require('./src/utils/select.js')
-const cmd = {
-  pollReactions: require('./src/poll-reactions.js'),
-  source: require('./src/source.js'),
-  welcome: require('./src/welcome.js'),
-  voteLockdown: require('./src/vote-lockdown.js'),
-  mentions: require('./src/mentions.js'),
-  avatar: require('./src/avatar.js'),
-  minecraft: require('./src/minecraft.js'),
+import parseCommand from './src/utils/parseCommand'
+import select from './src/utils/select'
+import * as cmd from './src/cmd'
 
-  about: require('./src/about.js'),
-  ignore: require('./src/ignore-us.js'),
-  internals: require('./src/internals.js')
-}
+type Command = (message: Message, args: string[]) => Promise<void>
 
-async function help (message) {
-  const aliases = new Map()
+async function help (message: Message): Promise<void> {
+  const aliases: Map<Command, Set<string>> = new Map()
   for (const [commandName, commandFunc] of Object.entries(commands)) {
     // Don't show owner commands to non-owners
     if (
@@ -29,12 +19,14 @@ async function help (message) {
     ) {
       continue
     }
-    if (!aliases.has(commandFunc)) {
-      aliases.set(commandFunc, new Set())
+    let set = aliases.get(commandFunc)
+    if (!set) {
+      set = new Set()
+      aliases.set(commandFunc, set)
     }
-    aliases.get(commandFunc).add(commandName)
+    set.add(commandName)
   }
-  message.reply({
+  await message.reply({
     content: select([
       'here you gooo',
       'taste and sample as you please',
@@ -65,11 +57,11 @@ async function help (message) {
     ]
   })
 }
-const ownerCommands = {
+const ownerCommands: Record<string, Command> = {
   'ignore us please': cmd.ignore.ignore,
   exeunt: cmd.internals.exit
 }
-const commands = {
+const commands: Record<string, Command> = {
   'source of <id>': cmd.source.getSource,
   'get raw message source of message <id> in this channel':
     cmd.source.getSource,
@@ -212,7 +204,7 @@ client.on('messageCreate', async message => {
 })
 
 client.on('messageUpdate', async (_oldMessage, newMessage) => {
-  await cmd.pollReactions.onEdit(newMessage)
+  await cmd.pollReactions.onEdit(newMessage as Message)
 })
 
 client.on('guildMemberAdd', async member => {
