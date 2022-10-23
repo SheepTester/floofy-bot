@@ -1,5 +1,5 @@
 import { Message, MessageAttachment } from 'discord.js'
-import select from '../utils/select.js'
+import select from '../utils/select'
 
 export async function getSource (
   message: Message,

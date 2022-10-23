@@ -116,6 +116,8 @@ const commands: Record<string, Command> = {
   'not a poll channel': cmd.pollReactions.notPollChannel,
   "this isn't a poll channel": cmd.pollReactions.notPollChannel,
 
+  'emoji usage': cmd.emojiUsage.getUsage,
+
   'welcome new folk in <id> with:': cmd.welcome.setWelcome,
   'when a user joins the server send a message in channel <id> containing the following:':
     cmd.welcome.setWelcome,
@@ -139,11 +141,12 @@ const commands: Record<string, Command> = {
 }
 
 const client = new Client({
-  partials: ['CHANNEL'],
+  partials: ['CHANNEL', 'MESSAGE', 'REACTION'],
   intents: [
     Intents.FLAGS.GUILDS,
     Intents.FLAGS.GUILD_MESSAGES,
     Intents.FLAGS.GUILD_MEMBERS,
+    Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
     Intents.FLAGS.DIRECT_MESSAGES
   ]
 })
@@ -201,14 +204,19 @@ client.on('messageCreate', async message => {
   await cmd.pollReactions.onMessage(message)
   await cmd.welcome.onMessage(message)
   await cmd.mentions.onMessage(message)
+  await cmd.emojiUsage.onMessage(message)
 })
 
 client.on('messageUpdate', async (_oldMessage, newMessage) => {
-  await cmd.pollReactions.onEdit(newMessage as Message)
+  await cmd.pollReactions.onEdit(newMessage)
 })
 
 client.on('guildMemberAdd', async member => {
   await cmd.welcome.onJoin(member)
+})
+
+client.on('messageReactionAdd', async (reaction, _user) => {
+  cmd.emojiUsage.onReact(reaction)
 })
 
 process.on('unhandledRejection', reason => {
@@ -221,7 +229,8 @@ fs.ensureDir('./data/')
       cmd.pollReactions.onReady(),
       cmd.welcome.onReady(),
       cmd.voteLockdown.onReady(),
-      cmd.mentions.onReady()
+      cmd.mentions.onReady(),
+      cmd.emojiUsage.onReady()
     ])
   )
   .then(() => client.login(process.env.TOKEN))

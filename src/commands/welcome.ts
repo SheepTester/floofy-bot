@@ -1,7 +1,7 @@
 import { DMChannel, GuildMember, Message, TextChannel } from 'discord.js'
 
 import CachedMap from '../utils/CachedMap'
-import ok from '../utils/ok.js'
+import ok from '../utils/ok'
 import select from '../utils/select'
 
 type WelcomeChannel = {

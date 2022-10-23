@@ -5,6 +5,8 @@ export * as voteLockdown from './vote-lockdown'
 export * as mentions from './mentions'
 export * as avatar from './avatar'
 export * as minecraft from './minecraft'
+export * as emojiUsage from './emoji-usage'
+
 export * as about from './about'
 export * as ignore from './ignore-us'
 export * as internals from './internals'

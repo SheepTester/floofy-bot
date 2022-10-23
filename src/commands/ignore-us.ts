@@ -1,5 +1,5 @@
 import { Message } from 'discord.js'
-import select from '../utils/select.js'
+import select from '../utils/select'
 
 export let ignoring: string | null = null
 

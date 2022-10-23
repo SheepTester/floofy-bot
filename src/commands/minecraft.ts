@@ -1,6 +1,6 @@
 import { Message } from 'discord.js'
 import { Client, PacketWriter, State } from 'mcproto'
-import select from '../utils/select.js'
+import select from '../utils/select'
 
 type Player = {
   name: string

@@ -1,8 +1,10 @@
-import { DMChannel, Message } from 'discord.js'
+import { DMChannel, Message, PartialMessage } from 'discord.js'
 import emojiList from './emoji.json'
-import CachedMap from '../utils/CachedMap.js'
-import ok from '../utils/ok.js'
-import select from '../utils/select.js'
+import CachedMap from '../utils/CachedMap'
+import ok from '../utils/ok'
+import select from '../utils/select'
+
+type Msg = PartialMessage | Message
 
 const emojiRegex = new RegExp(
   `<a?:\\w+:\\d+>|${emojiList.join('|').replace(/[+*]/g, m => '\\' + m)}`,
@@ -12,11 +14,13 @@ const emojiRegex = new RegExp(
 const pollChannels = new CachedMap<boolean>('./data/poll-reactions.json')
 export const onReady = pollChannels.read
 
-function isPollChannel (message: Message): boolean {
+function isPollChannel (message: Msg): boolean {
   return pollChannels.get(message.channel.id, false)
 }
-function isPoll (message: Message): boolean {
-  return isPollChannel(message) || message.content.includes('(this is a poll)')
+function isPoll (message: Msg): boolean {
+  return (
+    isPollChannel(message) || !!message.content?.includes('(this is a poll)')
+  )
 }
 
 export async function pollChannel (message: Message): Promise<void> {
@@ -87,9 +91,9 @@ export async function onMessage (message: Message): Promise<void> {
   }
 }
 
-export async function onEdit (newMessage: Message): Promise<void> {
+export async function onEdit (newMessage: Msg): Promise<void> {
   if (isPoll(newMessage)) {
-    const emoji = newMessage.content.match(emojiRegex) || []
+    const emoji = newMessage.content?.match(emojiRegex) || []
     if (emoji.length > 0) {
       // TODO: Do not re-add already-reacted emoji for speedier reaction
       // additions

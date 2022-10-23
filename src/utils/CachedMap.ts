@@ -2,7 +2,7 @@ import fs from 'fs-extra'
 
 export default class CachedMap<T> {
   #path: string
-  #object: Record<string, T> = {}
+  #object!: Record<string, T>
 
   constructor (path: string) {
     this.#path = path
@@ -31,6 +31,10 @@ export default class CachedMap<T> {
   set (id: string, value: T): this {
     this.#object[id] = value
     return this
+  }
+
+  entries (): [string, T][] {
+    return Object.entries(this.#object)
   }
 
   async save (): Promise<void> {

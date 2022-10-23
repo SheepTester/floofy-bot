@@ -61,7 +61,7 @@ function select(list) {
 
 class CachedMap {
     #path;
-    #object = {};
+    #object;
     constructor(path) {
         this.#path = path;
     }
@@ -84,6 +84,9 @@ class CachedMap {
         this.#object[id] = value;
         return this;
     }
+    entries() {
+        return Object.entries(this.#object);
+    }
     async save() {
         await fs.writeFile(this.#path, JSON.stringify(this.#object, null, '\t'));
     }
@@ -93,12 +96,12 @@ var ok = ['👌', '🆗', '👍', '✅'];
 
 const emojiRegex = new RegExp(`<a?:\\w+:\\d+>|${emojiList.join('|').replace(/[+*]/g, m => '\\' + m)}`, 'g');
 const pollChannels = new CachedMap('./data/poll-reactions.json');
-const onReady$3 = pollChannels.read;
+const onReady$4 = pollChannels.read;
 function isPollChannel(message) {
     return pollChannels.get(message.channel.id, false);
 }
 function isPoll(message) {
-    return isPollChannel(message) || message.content.includes('(this is a poll)');
+    return (isPollChannel(message) || !!message.content?.includes('(this is a poll)'));
 }
 async function pollChannel(message) {
     if (message.channel instanceof discord_js.DMChannel ||
@@ -143,7 +146,7 @@ async function notPollChannel(message) {
         ]));
     }
 }
-async function onMessage$2(message) {
+async function onMessage$3(message) {
     if (isPoll(message)) {
         const emoji = message.content.match(emojiRegex) || [];
         if (emoji.length === 0) {
@@ -156,7 +159,7 @@ async function onMessage$2(message) {
 }
 async function onEdit(newMessage) {
     if (isPoll(newMessage)) {
-        const emoji = newMessage.content.match(emojiRegex) || [];
+        const emoji = newMessage.content?.match(emojiRegex) || [];
         if (emoji.length > 0) {
             // TODO: Do not re-add already-reacted emoji for speedier reaction
             // additions
@@ -225,7 +228,7 @@ async function getDate(message, [id = message.author.id]) {
 
 const welcomeChannels = new CachedMap('./data/welcome-channels.json');
 const sentienceMsgSent = new CachedMap('./data/sentience-msg-sent.json');
-const onReady$2 = () => Promise.all([welcomeChannels.read(), sentienceMsgSent.read()]);
+const onReady$3 = () => Promise.all([welcomeChannels.read(), sentienceMsgSent.read()]);
 async function setWelcome(message, [channelId, welcomeMsg]) {
     if (message.channel instanceof discord_js.DMChannel ||
         message.channel.lastMessageId === undefined) {
@@ -265,7 +268,7 @@ async function onJoin(member) {
         ]
     });
 }
-async function onMessage$1(message) {
+async function onMessage$2(message) {
     if (!message.guild)
         return;
     const { channelId } = welcomeChannels.get(message.guild.id) ?? {};
@@ -296,7 +299,7 @@ async function onMessage$1(message) {
 
 const lockdownCategories = new CachedMap('./data/lockdown-cats.json');
 const lockdownVotes = new CachedMap('./data/lockdown-votes.json');
-const onReady$1 = () => Promise.all([lockdownCategories.read(), lockdownVotes.read()]);
+const onReady$2 = () => Promise.all([lockdownCategories.read(), lockdownVotes.read()]);
 async function setLockdownCategory(message, [categoryId]) {
     if (message.channel instanceof discord_js.DMChannel ||
         message.channel.lastMessageId === undefined) {
@@ -357,9 +360,8 @@ async function voteLockdown(message) {
 }
 
 const mentionCache = new CachedMap('./data/mentions.json');
-const onReady = mentionCache.read;
-/** @param {Message} message */
-async function onMessage(message) {
+const onReady$1 = mentionCache.read;
+async function onMessage$1(message) {
     const { channel: { id: channelId }, mentions } = message;
     if (mentions.everyone || mentions.roles.size > 0 || mentions.users.size > 0) {
         const msg = {
@@ -578,6 +580,55 @@ async function serverStatus(message, [address]) {
     }
 }
 
+const customEmojiRegex = /<a?:\w+:(\d+)>/g;
+const emojiUsage = new CachedMap('./data/emoji-usage.json');
+const onReady = emojiUsage.read;
+async function getUsage(message) {
+    if (!message.guild) {
+        await message.reply('i dont track emojis in dms sry');
+        return;
+    }
+    await message.reply({
+        embeds: [
+            {
+                description: Array.from(message.guild.emojis.cache, ([emojiId, { animated }]) => ({
+                    emoji: `<${animated ? 'a' : ''}:w:${emojiId}>`,
+                    count: emojiUsage.get(`${message.guildId}-${emojiId}`, 0)
+                }))
+                    .sort((a, b) => b.count - a.count)
+                    .map(({ emoji, count }) => `${emoji} ${count}`)
+                    .join('\n')
+            }
+        ]
+    });
+}
+async function onMessage(message) {
+    if (!message.guildId) {
+        return;
+    }
+    // Remove duplicate emoji
+    const emojis = new Set(Array.from(message.content.matchAll(customEmojiRegex), ([, emojiId]) => emojiId));
+    for (const emojiId of emojis) {
+        const id = `${message.guildId}-${emojiId}`;
+        emojiUsage.set(id, emojiUsage.get(id, 0) + 1);
+    }
+    emojiUsage.save();
+}
+async function onReact(reaction) {
+    if (reaction.partial) {
+        await reaction.fetch();
+    }
+    // It's easy to inflate the count by reacting and unreacting. Only making the
+    // first reaction count should thwart this somewhat.
+    if (reaction.emoji instanceof discord_js.GuildEmoji &&
+        reaction.count === 1 &&
+        reaction.emoji.guild.id === reaction.message.guildId) {
+        const id = `${reaction.message.guildId}-${reaction.emoji.id}`;
+        emojiUsage.set(id, emojiUsage.get(id, 0) + 1);
+    }
+    emojiUsage.save();
+}
+
 async function about(message) {
     await message.reply({
         content: select(['hi', 'i am moofy', 'hello', 'i am me']),
@@ -784,6 +835,7 @@ const commands = {
     'not poll': notPollChannel,
     'not a poll channel': notPollChannel,
     "this isn't a poll channel": notPollChannel,
+    'emoji usage': getUsage,
     'welcome new folk in <id> with:': setWelcome,
     'when a user joins the server send a message in channel <id> containing the following:': setWelcome,
     'allow people to lock down <id>': setLockdownCategory,
@@ -799,11 +851,12 @@ const commands = {
     ...ownerCommands
 };
 const client = new discord_js.Client({
-    partials: ['CHANNEL'],
+    partials: ['CHANNEL', 'MESSAGE', 'REACTION'],
     intents: [
         discord_js.Intents.FLAGS.GUILDS,
         discord_js.Intents.FLAGS.GUILD_MESSAGES,
         discord_js.Intents.FLAGS.GUILD_MEMBERS,
+        discord_js.Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
         discord_js.Intents.FLAGS.DIRECT_MESSAGES
     ]
 });
@@ -849,6 +902,7 @@ client.on('messageCreate', async (message) => {
             ]));
         }
     }
+    await onMessage$3(message);
     await onMessage$2(message);
     await onMessage$1(message);
     await onMessage(message);
@@ -859,11 +913,15 @@ client.on('messageUpdate', async (_oldMessage, newMessage) => {
 client.on('guildMemberAdd', async (member) => {
     await onJoin(member);
 });
+client.on('messageReactionAdd', async (reaction, _user) => {
+    onReact(reaction);
+});
 process.on('unhandledRejection', reason => {
     console.error(reason);
 });
 fs.ensureDir('./data/')
     .then(() => Promise.all([
+    onReady$4(),
     onReady$3(),
     onReady$2(),
     onReady$1(),

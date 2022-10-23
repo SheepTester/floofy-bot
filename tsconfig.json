@@ -13,5 +13,10 @@
   "display": "Recommended",
   "exclude": [
     "./scripts/"
-  ]
+  ],
+  "ts-node": {
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
+  }
 }

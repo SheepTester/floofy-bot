@@ -1,6 +1,6 @@
 import { Message } from 'discord.js'
-import CachedMap from '../utils/CachedMap.js'
-import select from '../utils/select.js'
+import CachedMap from '../utils/CachedMap'
+import select from '../utils/select'
 
 type LastPing = {
   author: string
@@ -12,7 +12,6 @@ type LastPing = {
 const mentionCache = new CachedMap<LastPing>('./data/mentions.json')
 export const onReady = mentionCache.read
 
-/** @param {Message} message */
 export async function onMessage (message: Message): Promise<void> {
   const {
     channel: { id: channelId },
