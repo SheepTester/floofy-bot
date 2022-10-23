@@ -1,6 +1,6 @@
 import { exec } from 'child_process'
 import { Message } from 'discord.js'
-import select from './utils/select'
+import select from '../utils/select'
 
 type ExecutionResult = {
   // I don't know where `ExecException` comes from

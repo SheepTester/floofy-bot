@@ -1,8 +1,8 @@
 import { DMChannel, Message } from 'discord.js'
 import emojiList from './emoji.json'
-import CachedMap from './utils/CachedMap.js'
-import ok from './utils/ok.js'
-import select from './utils/select.js'
+import CachedMap from '../utils/CachedMap.js'
+import ok from '../utils/ok.js'
+import select from '../utils/select.js'
 
 const emojiRegex = new RegExp(
   `<a?:\\w+:\\d+>|${emojiList.join('|').replace(/[+*]/g, m => '\\' + m)}`,

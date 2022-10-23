@@ -3,9 +3,9 @@ require('dotenv').config()
 import { Client, Intents, Message } from 'discord.js'
 import fs from 'fs-extra'
 
-import parseCommand from './src/utils/parseCommand'
-import select from './src/utils/select'
-import * as cmd from './src/cmd'
+import parseCommand from './utils/parseCommand'
+import select from './utils/select'
+import * as cmd from './commands'
 
 type Command = (message: Message, args: string[]) => Promise<void>
 

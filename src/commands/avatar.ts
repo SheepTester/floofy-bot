@@ -1,5 +1,5 @@
 import { Message } from 'discord.js'
-import select from './utils/select'
+import select from '../utils/select'
 
 export async function avatar (
   message: Message,

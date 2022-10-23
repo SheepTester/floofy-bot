@@ -1,7 +1,7 @@
 import { CategoryChannel, DMChannel, Message } from 'discord.js'
-import CachedMap from './utils/CachedMap'
-import ok from './utils/ok'
-import select from './utils/select'
+import CachedMap from '../utils/CachedMap'
+import ok from '../utils/ok'
+import select from '../utils/select'
 
 type Vote = {
   time: number

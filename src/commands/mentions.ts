@@ -1,6 +1,6 @@
 import { Message } from 'discord.js'
-import CachedMap from './utils/CachedMap.js'
-import select from './utils/select.js'
+import CachedMap from '../utils/CachedMap.js'
+import select from '../utils/select.js'
 
 type LastPing = {
   author: string
