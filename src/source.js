@@ -37,7 +37,14 @@ module.exports.getSource = async (
       : [
           {
             title: select(['conTENT', 'source', 'wow', 'very cool']),
-            description: `\`\`\`md\n${msg.content}\n\`\`\``
+            description:
+              msg.content.length > 0
+                ? `\`\`\`md\n${msg.content}\n\`\`\``
+                : select([
+                    '*the message is EMPTY*',
+                    '*there is NOTHING*',
+                    '*no message CONTENT very interest*'
+                  ])
           }
         ]
   })
