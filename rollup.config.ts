@@ -5,7 +5,9 @@ import typescript from '@rollup/plugin-typescript'
 const config: RollupOptions = {
   input: 'src/index.ts',
   output: {
-    file: 'index.js',
+    // Must be in the same directory as input for emoji.json to be resolved
+    // properly. https://rollupjs.org/guide/en/#external
+    file: 'src/bundle.js',
     format: 'cjs'
   },
   plugins: [typescript()],

@@ -10,6 +10,12 @@ Edit `.env` per `.env.example`, then do
 npm start
 ```
 
+## Develop
+
+```sh
+npm run build
+```
+
 ## Update `emoji.json`
 
 ```sh
