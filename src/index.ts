@@ -254,4 +254,11 @@ try {
     log.error(`${error?.stack}`)
     origErr(error)
   }
-} catch {}
+} catch (error) {
+  try {
+    fs.writeFileSync(
+      './data/EventLoggerError.txt',
+      error instanceof Error ? error.stack || error.message : String(error)
+    )
+  } catch {}
+}

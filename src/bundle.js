@@ -716,8 +716,10 @@ async function exit(message) {
         console.log('Restarting');
         const results = [];
         async function reportExec(command) {
+            results.push(`$ ${command}`);
+            await msg.edit(displayResults(results));
             const { error, stdout, stderr } = await execute(command);
-            results.push(`$ ${command}`, stdout, stderr);
+            results.push(stdout, stderr);
             if (error) {
                 results.push(error?.stack);
             }
@@ -947,4 +949,9 @@ try {
         origErr(error);
     };
 }
-catch { }
+catch (error) {
+    try {
+        fs.writeFileSync('./data/EventLoggerError.txt', error instanceof Error ? error.stack || error.message : String(error));
+    }
+    catch { }
+}

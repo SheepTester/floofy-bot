@@ -34,8 +34,10 @@ export async function exit (message: Message): Promise<void> {
     const results: Results = []
 
     async function reportExec (command: string) {
+      results.push(`$ ${command}`)
+      await msg.edit(displayResults(results))
       const { error, stdout, stderr } = await execute(command)
-      results.push(`$ ${command}`, stdout, stderr)
+      results.push(stdout, stderr)
       if (error) {
         results.push(error?.stack)
       }
