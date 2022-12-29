@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "rollup --config rollup.config.ts --configPlugin typescript",
+    "dev": "ts-node src/index.ts",
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

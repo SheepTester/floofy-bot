@@ -1,5 +1,4 @@
 import {
-  Guild,
   GuildEmoji,
   Message,
   MessageReaction,
@@ -21,7 +20,8 @@ export async function getUsage (message: Message): Promise<void> {
     embeds: [
       {
         description: Array.from(
-          message.guild.emojis.cache,
+          // Force fetch in case emoji changed
+          await message.guild.emojis.fetch(undefined, { force: true }),
           ([emojiId, { animated }]) => ({
             emoji: `<${animated ? 'a' : ''}:w:${emojiId}>`,
             count: emojiUsage.get(`${message.guildId}-${emojiId}`, 0)
