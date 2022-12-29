@@ -1,5 +1,3 @@
-// deno run --allow-net=discord.com --allow-write=./src/emoji.json scripts/get-emoji.ts
-
 import * as z from 'https://deno.land/x/zod@v3.17.3/mod.ts'
 
 type Emoji = {

@@ -20,7 +20,7 @@ npm run build
 ## Update `emoji.json`
 
 ```sh
-deno run --allow-net=discord.com scripts/get-emoji.ts > src/commands/emoji.json
+deno run --allow-net=discord.com scripts/get-emoji.ts > src/utils/emoji.json
 ```
 
 ## Install as a service

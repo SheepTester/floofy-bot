@@ -16,7 +16,7 @@ const config: RollupOptions = {
     'fs-extra',
     'mcproto',
     'child_process',
-    fileURLToPath(new URL('./src/commands/emoji.json', import.meta.url))
+    fileURLToPath(new URL('./src/utils/emoji.json', import.meta.url))
   ]
 }
 export default config

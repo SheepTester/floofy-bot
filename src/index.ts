@@ -215,8 +215,15 @@ client.on('guildMemberAdd', async member => {
   await cmd.welcome.onJoin(member)
 })
 
-client.on('messageReactionAdd', async (reaction, _user) => {
+client.on('messageReactionAdd', async (reaction, user) => {
   cmd.emojiUsage.onReact(reaction)
+  cmd.reactionRoles.onReact(reaction, user, true)
+})
+
+// There is also RemoveAll and RemoveEmoji, but I think they should keep the
+// user's role and just clear reactions. Also easier for me 😊
+client.on('messageReactionRemove', async (reaction, user) => {
+  cmd.reactionRoles.onReact(reaction, user, false)
 })
 
 process.on('unhandledRejection', reason => {

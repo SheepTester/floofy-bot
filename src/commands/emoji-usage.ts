@@ -57,14 +57,16 @@ export async function onReact (
   reaction: MessageReaction | PartialMessageReaction
 ): Promise<void> {
   if (reaction.partial) {
-    await reaction.fetch()
+    reaction = await reaction.fetch()
   }
   // It's easy to inflate the count by reacting and unreacting. Only making the
   // first reaction count should thwart this somewhat.
   if (
-    reaction.emoji instanceof GuildEmoji &&
     reaction.count === 1 &&
-    reaction.emoji.guild.id === reaction.message.guildId
+    !(
+      reaction.emoji instanceof GuildEmoji &&
+      reaction.emoji.guild.id !== reaction.message.guildId
+    )
   ) {
     const id = `${reaction.message.guildId}-${reaction.emoji.id}`
     emojiUsage.set(id, emojiUsage.get(id, 0) + 1)

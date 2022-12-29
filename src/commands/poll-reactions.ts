@@ -1,15 +1,10 @@
 import { DMChannel, Message, PartialMessage } from 'discord.js'
-import emojiList from './emoji.json'
 import CachedMap from '../utils/CachedMap'
+import { emojiRegex } from '../utils/emoji-regex'
 import ok from '../utils/ok'
 import select from '../utils/select'
 
 type Msg = PartialMessage | Message
-
-const emojiRegex = new RegExp(
-  `<a?:\\w+:\\d+>|${emojiList.join('|').replace(/[+*]/g, m => '\\' + m)}`,
-  'g'
-)
 
 const pollChannels = new CachedMap<boolean>('./data/poll-reactions.json')
 export const onReady = pollChannels.read
