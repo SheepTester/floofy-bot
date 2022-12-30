@@ -201,21 +201,44 @@ client.on('messageCreate', async message => {
     }
   }
 
-  await cmd.pollReactions.onMessage(message)
   await cmd.welcome.onMessage(message)
   await cmd.mentions.onMessage(message)
   await cmd.emojiUsage.onMessage(message)
+
+  const reactions =
+    cmd.pollReactions.getReactions(message, true) ??
+    (await cmd.reactionRoles.getReactions(message))
+  if (reactions) {
+    await Promise.all(reactions.map(em => message.react(em))).catch(() => {})
+  }
 })
 
 client.on('messageUpdate', async (_oldMessage, newMessage) => {
-  await cmd.pollReactions.onEdit(newMessage)
+  if (cmd.ignore.ignoring !== null) {
+    return
+  }
+  if (newMessage) {
+    newMessage = await newMessage.fetch()
+  }
+  const reactions =
+    cmd.pollReactions.getReactions(newMessage, false) ??
+    (await cmd.reactionRoles.getReactions(newMessage))
+  if (reactions) {
+    await Promise.all(reactions.map(em => newMessage.react(em))).catch(() => {})
+  }
 })
 
 client.on('guildMemberAdd', async member => {
+  if (cmd.ignore.ignoring !== null) {
+    return
+  }
   await cmd.welcome.onJoin(member)
 })
 
 client.on('messageReactionAdd', async (reaction, user) => {
+  if (cmd.ignore.ignoring !== null) {
+    return
+  }
   cmd.emojiUsage.onReact(reaction)
   cmd.reactionRoles.onReact(reaction, user, true)
 })
@@ -223,6 +246,9 @@ client.on('messageReactionAdd', async (reaction, user) => {
 // There is also RemoveAll and RemoveEmoji, but I think they should keep the
 // user's role and just clear reactions. Also easier for me 😊
 client.on('messageReactionRemove', async (reaction, user) => {
+  if (cmd.ignore.ignoring !== null) {
+    return
+  }
   cmd.reactionRoles.onReact(reaction, user, false)
 })
 

@@ -8,8 +8,15 @@ import {
 } from 'discord.js'
 import { emojiRegex } from '../utils/emoji-regex'
 
-function isMenu (message: Message): boolean {
-  return message.content.includes('(select roles)')
+async function isMenu (message: Message): Promise<boolean> {
+  if (!message.guild || !message.content.includes('(select roles)')) {
+    return false
+  }
+  // Author of select role menu must be present and able to add roles manually
+  return message.guild.members
+    .fetch(message.author)
+    .then(member => member.permissions.has('MANAGE_ROLES'))
+    .catch(() => false)
 }
 
 const roleMentionRegex = /<@&(\d+)>/
@@ -29,6 +36,16 @@ function parseMenu (content: string): Record<string, Snowflake> {
   return roles
 }
 
+export async function getReactions (
+  message: Message
+): Promise<string[] | null> {
+  if (await isMenu(message)) {
+    return Object.keys(parseMenu(message.content))
+  } else {
+    return null
+  }
+}
+
 export async function onReact (
   reaction: MessageReaction | PartialMessageReaction,
   user: User | PartialUser,
@@ -37,7 +54,7 @@ export async function onReact (
   const message = reaction.message.partial
     ? await reaction.message.fetch()
     : reaction.message
-  if (!message.guild || !isMenu(message)) {
+  if (!message.guild || !(await isMenu(message))) {
     return
   }
   // Author of select role menu must be present and able to add roles manually
@@ -59,9 +76,7 @@ export async function onReact (
       } else {
         await member.roles.remove(roles[emoji])
       }
-    } catch (error) {
-      console.log('error', error)
-
+    } catch {
       // Ignore permission errors, etc.
       return
     }

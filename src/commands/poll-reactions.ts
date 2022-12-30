@@ -4,21 +4,21 @@ import { emojiRegex } from '../utils/emoji-regex'
 import ok from '../utils/ok'
 import select from '../utils/select'
 
-type Msg = PartialMessage | Message
-
 const pollChannels = new CachedMap<boolean>('./data/poll-reactions.json')
 export const onReady = pollChannels.read
 
-function isPollChannel (message: Msg): boolean {
+function isPollChannel (message: PartialMessage | Message): boolean {
   return pollChannels.get(message.channel.id, false)
 }
-function isPoll (message: Msg): boolean {
+function isPoll (message: Message): boolean {
   return (
     isPollChannel(message) || !!message.content?.includes('(this is a poll)')
   )
 }
 
-export async function pollChannel (message: Message): Promise<void> {
+export async function pollChannel (
+  message: PartialMessage | Message
+): Promise<void> {
   if (
     message.channel instanceof DMChannel ||
     message.channel.lastMessageId === undefined
@@ -73,26 +73,18 @@ export async function notPollChannel (message: Message): Promise<void> {
   }
 }
 
-export async function onMessage (message: Message): Promise<void> {
+export function getReactions (
+  message: Message,
+  isNew: boolean
+): string[] | null {
   if (isPoll(message)) {
     const emoji = message.content.match(emojiRegex) || []
-    if (emoji.length === 0) {
-      await Promise.all([message.react('👍'), message.react('👎')]).catch(
-        () => {}
-      )
+    if (emoji.length === 0 && isNew) {
+      return ['👍', '👎']
     } else {
-      await Promise.all(emoji.map(em => message.react(em))).catch(() => {})
+      return emoji
     }
-  }
-}
-
-export async function onEdit (newMessage: Msg): Promise<void> {
-  if (isPoll(newMessage)) {
-    const emoji = newMessage.content?.match(emojiRegex) || []
-    if (emoji.length > 0) {
-      // TODO: Do not re-add already-reacted emoji for speedier reaction
-      // additions
-      await Promise.all(emoji.map(em => newMessage.react(em))).catch(() => {})
-    }
+  } else {
+    return null
   }
 }
