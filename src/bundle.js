@@ -2,7 +2,7 @@
 
 var discord_js = require('discord.js');
 var fs = require('fs-extra');
-var emojiList = require('./commands/emoji.json');
+var emojiList = require('./utils/emoji.json');
 var mcproto = require('mcproto');
 var child_process = require('child_process');
 
@@ -92,9 +92,10 @@ class CachedMap {
     }
 }
 
+const emojiRegex = new RegExp(`<a?:\\w+:(\\d+)>|${emojiList.join('|').replace(/[+*]/g, m => '\\' + m)}`, 'g');
+
 var ok = ['👌', '🆗', '👍', '✅'];
 
-const emojiRegex = new RegExp(`<a?:\\w+:\\d+>|${emojiList.join('|').replace(/[+*]/g, m => '\\' + m)}`, 'g');
 const pollChannels = new CachedMap('./data/poll-reactions.json');
 const onReady$4 = pollChannels.read;
 function isPollChannel(message) {
@@ -146,25 +147,18 @@ async function notPollChannel(message) {
         ]));
     }
 }
-async function onMessage$3(message) {
+function getReactions$1(message, isNew) {
     if (isPoll(message)) {
         const emoji = message.content.match(emojiRegex) || [];
-        if (emoji.length === 0) {
-            await Promise.all([message.react('👍'), message.react('👎')]).catch(() => { });
+        if (emoji.length === 0 && isNew) {
+            return ['👍', '👎'];
         }
         else {
-            await Promise.all(emoji.map(em => message.react(em))).catch(() => { });
+            return emoji;
         }
     }
-}
-async function onEdit(newMessage) {
-    if (isPoll(newMessage)) {
-        const emoji = newMessage.content?.match(emojiRegex) || [];
-        if (emoji.length > 0) {
-            // TODO: Do not re-add already-reacted emoji for speedier reaction
-            // additions
-            await Promise.all(emoji.map(em => newMessage.react(em))).catch(() => { });
-        }
+    else {
+        return null;
     }
 }
 
@@ -591,7 +585,9 @@ async function getUsage(message) {
     await message.reply({
         embeds: [
             {
-                description: Array.from(message.guild.emojis.cache, ([emojiId, { animated }]) => ({
+                description: Array.from(
+                // Force fetch in case emoji changed
+                await message.guild.emojis.fetch(undefined, { force: true }), ([emojiId, { animated }]) => ({
                     emoji: `<${animated ? 'a' : ''}:w:${emojiId}>`,
                     count: emojiUsage.get(`${message.guildId}-${emojiId}`, 0)
                 }))
@@ -614,19 +610,88 @@ async function onMessage(message) {
     }
     emojiUsage.save();
 }
-async function onReact(reaction) {
+async function onReact$1(reaction) {
     if (reaction.partial) {
-        await reaction.fetch();
+        reaction = await reaction.fetch();
     }
     // It's easy to inflate the count by reacting and unreacting. Only making the
     // first reaction count should thwart this somewhat.
-    if (reaction.emoji instanceof discord_js.GuildEmoji &&
-        reaction.count === 1 &&
-        reaction.emoji.guild.id === reaction.message.guildId) {
+    if (reaction.count === 1 &&
+        !(reaction.emoji instanceof discord_js.GuildEmoji &&
+            reaction.emoji.guild.id !== reaction.message.guildId)) {
         const id = `${reaction.message.guildId}-${reaction.emoji.id}`;
         emojiUsage.set(id, emojiUsage.get(id, 0) + 1);
     }
     emojiUsage.save();
+}
+
+async function isMenu(message) {
+    if (!message.guild || !message.content.includes('(select roles)')) {
+        return false;
+    }
+    // Author of select role menu must be present and able to add roles manually
+    return message.guild.members
+        .fetch(message.author)
+        .then(member => member.permissions.has('MANAGE_ROLES'))
+        .catch(() => false);
+}
+const roleMentionRegex = /<@&(\d+)>/;
+function parseMenu(content) {
+    const roles = {};
+    for (const line of content.split('\n')) {
+        const roleId = line.match(roleMentionRegex);
+        if (!roleId) {
+            continue;
+        }
+        // Allow any emoji in line to add/remove the role (also because emojiRegex
+        // is global, so I can't use .match anyways)
+        for (const [unicode, customId] of line.matchAll(emojiRegex)) {
+            roles[customId ?? unicode] = roleId[1];
+        }
+    }
+    return roles;
+}
+async function getReactions(message) {
+    if (await isMenu(message)) {
+        return Object.keys(parseMenu(message.content));
+    }
+    else {
+        return null;
+    }
+}
+async function onReact(reaction, user, added) {
+    const message = reaction.message.partial
+        ? await reaction.message.fetch()
+        : reaction.message;
+    if (!message.guild || !(await isMenu(message))) {
+        return;
+    }
+    // Author of select role menu must be present and able to add roles manually
+    const menuAuthor = await message.guild.members
+        .fetch(message.author)
+        .catch(() => null);
+    if (!menuAuthor?.permissions.has('MANAGE_ROLES')) {
+        return;
+    }
+    const roles = parseMenu(message.content);
+    // `id` has custom emoji ID, `name` has Unicode character
+    const emoji = reaction.emoji.id ?? reaction.emoji.name;
+    console.log(roles, emoji);
+    if (emoji && roles[emoji]) {
+        try {
+            const member = await message.guild.members.fetch(user.id);
+            if (added) {
+                await member.roles.add(roles[emoji]);
+            }
+            else {
+                await member.roles.remove(roles[emoji]);
+            }
+        }
+        catch {
+            // Ignore permission errors, etc.
+            return;
+        }
+    }
 }
 
 async function about(message) {
@@ -904,19 +969,48 @@ client.on('messageCreate', async (message) => {
             ]));
         }
     }
-    await onMessage$3(message);
     await onMessage$2(message);
     await onMessage$1(message);
     await onMessage(message);
+    const reactions = getReactions$1(message, true) ??
+        (await getReactions(message));
+    if (reactions) {
+        await Promise.all(reactions.map(em => message.react(em))).catch(() => { });
+    }
 });
 client.on('messageUpdate', async (_oldMessage, newMessage) => {
-    await onEdit(newMessage);
+    if (ignoring !== null) {
+        return;
+    }
+    if (newMessage) {
+        newMessage = await newMessage.fetch();
+    }
+    const reactions = getReactions$1(newMessage, false) ??
+        (await getReactions(newMessage));
+    if (reactions) {
+        await Promise.all(reactions.map(em => newMessage.react(em))).catch(() => { });
+    }
 });
 client.on('guildMemberAdd', async (member) => {
+    if (ignoring !== null) {
+        return;
+    }
     await onJoin(member);
 });
-client.on('messageReactionAdd', async (reaction, _user) => {
-    onReact(reaction);
+client.on('messageReactionAdd', async (reaction, user) => {
+    if (ignoring !== null) {
+        return;
+    }
+    onReact$1(reaction);
+    onReact(reaction, user, true);
+});
+// There is also RemoveAll and RemoveEmoji, but I think they should keep the
+// user's role and just clear reactions. Also easier for me 😊
+client.on('messageReactionRemove', async (reaction, user) => {
+    if (ignoring !== null) {
+        return;
+    }
+    onReact(reaction, user, false);
 });
 process.on('unhandledRejection', reason => {
     console.error(reason);
