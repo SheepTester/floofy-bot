@@ -33,6 +33,11 @@ export default class CachedMap<T> {
     return this
   }
 
+  delete (id: string): this {
+    delete this.#object[id]
+    return this
+  }
+
   entries (): [string, T][] {
     return Object.entries(this.#object)
   }

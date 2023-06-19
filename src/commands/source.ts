@@ -12,7 +12,7 @@ export async function getSource (
     await message.reply(`can't get channel <#${channelId}>`)
     return
   }
-  if (channel.type !== ChannelType.GuildText) {
+  if (!channel.isTextBased()) {
     await message.reply(
       `<#${channelId}> is not a channel with messages you fool`
     )

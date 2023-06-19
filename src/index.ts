@@ -102,6 +102,10 @@ const commands: Record<string, Command> = {
   'status:': cmd.minecraft.serverStatus,
   'who is on the minecraft server:': cmd.minecraft.serverStatus,
 
+  'track:': cmd.minecraft.track,
+  'track minecraft server:': cmd.minecraft.track,
+  'stop tracking': cmd.minecraft.track,
+
   'this is a poll channel': cmd.pollReactions.pollChannel,
   'turn on poll channel mode which auto-adds reactions to messages':
     cmd.pollReactions.pollChannel,
@@ -264,10 +268,12 @@ fs.ensureDir('./data/')
       cmd.welcome.onReady(),
       cmd.voteLockdown.onReady(),
       cmd.mentions.onReady(),
-      cmd.emojiUsage.onReady()
+      cmd.emojiUsage.onReady(),
+      cmd.minecraft.onReady()
     ])
   )
   .then(() => client.login(process.env.TOKEN))
+  .then(() => cmd.minecraft.init(client))
   .catch(err => {
     console.error(err)
     process.exit(1)
