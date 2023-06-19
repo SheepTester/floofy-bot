@@ -13,7 +13,7 @@ npm start
 ## Develop
 
 ```sh
-ts-node src/index.ts
+npm run dev
 npm run build
 ```
 

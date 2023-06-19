@@ -16,7 +16,7 @@ export async function avatar (
       embeds: [
         {
           image: {
-            url: user.displayAvatarURL({ format: 'png', size: 4096 })
+            url: user.displayAvatarURL({ extension: 'png', size: 4096 })
           }
         }
       ]

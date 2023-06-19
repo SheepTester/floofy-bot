@@ -1,6 +1,6 @@
 require('dotenv').config()
 
-import { Client, Intents, Message } from 'discord.js'
+import { Client, GatewayIntentBits, Message, Partials } from 'discord.js'
 import fs from 'fs-extra'
 
 import parseCommand from './utils/parseCommand'
@@ -141,13 +141,14 @@ const commands: Record<string, Command> = {
 }
 
 const client = new Client({
-  partials: ['CHANNEL', 'MESSAGE', 'REACTION'],
+  partials: [Partials.Channel, Partials.Message, Partials.Reaction],
   intents: [
-    Intents.FLAGS.GUILDS,
-    Intents.FLAGS.GUILD_MESSAGES,
-    Intents.FLAGS.GUILD_MEMBERS,
-    Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
-    Intents.FLAGS.DIRECT_MESSAGES
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.MessageContent
   ]
 })
 

@@ -1,4 +1,9 @@
-import { DMChannel, Message, PartialMessage } from 'discord.js'
+import {
+  DMChannel,
+  Message,
+  PartialMessage,
+  PermissionFlagsBits
+} from 'discord.js'
 import CachedMap from '../utils/CachedMap'
 import { emojiRegex } from '../utils/emoji-regex'
 import ok from '../utils/ok'
@@ -26,7 +31,11 @@ export async function pollChannel (
     await message.reply("who're you polling in here just me and you??")
     return
   }
-  if (!message.channel.permissionsFor(message.member!).has('MANAGE_CHANNELS')) {
+  if (
+    !message.channel
+      .permissionsFor(message.member!)
+      .has(PermissionFlagsBits.ManageChannels)
+  ) {
     await message.reply(
       "you can't even manage channels, why should i listen to you"
     )
@@ -54,7 +63,11 @@ export async function notPollChannel (message: Message): Promise<void> {
     await message.reply("who're you polling in here just me and you??")
     return
   }
-  if (!message.channel.permissionsFor(message.member!).has('MANAGE_CHANNELS')) {
+  if (
+    !message.channel
+      .permissionsFor(message.member!)
+      .has(PermissionFlagsBits.ManageChannels)
+  ) {
     await message.reply(
       "you can't even manage channels, why should i listen to you"
     )

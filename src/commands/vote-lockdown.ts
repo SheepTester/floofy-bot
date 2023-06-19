@@ -1,4 +1,9 @@
-import { CategoryChannel, DMChannel, Message } from 'discord.js'
+import {
+  CategoryChannel,
+  DMChannel,
+  Message,
+  PermissionFlagsBits
+} from 'discord.js'
 import CachedMap from '../utils/CachedMap'
 import ok from '../utils/ok'
 import select from '../utils/select'
@@ -24,7 +29,11 @@ export async function setLockdownCategory (
     await message.reply('no dms')
     return
   }
-  if (!message.channel.permissionsFor(message.member!).has('MANAGE_CHANNELS')) {
+  if (
+    !message.channel
+      .permissionsFor(message.member!)
+      .has(PermissionFlagsBits.ManageChannels)
+  ) {
     await message.reply(
       'lol first show me that you can manage chanenls then we talk'
     )
@@ -69,12 +78,7 @@ export async function voteLockdown (message: Message): Promise<void> {
   if (votes.length >= MIN_VOTES) {
     const success = await category.permissionOverwrites
       .resolve(message.guild!.roles.everyone.id)!
-      .edit(
-        {
-          VIEW_CHANNEL: null
-        },
-        'Democracy voted to lock the channel.'
-      )
+      .edit({ ViewChannel: null }, 'Democracy voted to lock the channel.')
       .then(() => true)
       .catch(() => false)
     await message.channel.send(

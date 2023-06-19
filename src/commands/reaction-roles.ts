@@ -3,6 +3,7 @@ import {
   MessageReaction,
   PartialMessageReaction,
   PartialUser,
+  PermissionFlagsBits,
   Snowflake,
   User
 } from 'discord.js'
@@ -15,7 +16,7 @@ async function isMenu (message: Message): Promise<boolean> {
   // Author of select role menu must be present and able to add roles manually
   return message.guild.members
     .fetch(message.author)
-    .then(member => member.permissions.has('MANAGE_ROLES'))
+    .then(member => member.permissions.has(PermissionFlagsBits.ManageRoles))
     .catch(() => false)
 }
 
@@ -61,7 +62,7 @@ export async function onReact (
   const menuAuthor = await message.guild.members
     .fetch(message.author)
     .catch(() => null)
-  if (!menuAuthor?.permissions.has('MANAGE_ROLES')) {
+  if (!menuAuthor?.permissions.has(PermissionFlagsBits.ManageRoles)) {
     return
   }
   const roles = parseMenu(message.content)

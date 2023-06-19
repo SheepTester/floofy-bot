@@ -1,4 +1,4 @@
-import { Message, MessageAttachment } from 'discord.js'
+import { Message, AttachmentBuilder, ChannelType } from 'discord.js'
 import select from '../utils/select'
 
 export async function getSource (
@@ -12,7 +12,7 @@ export async function getSource (
     await message.reply(`can't get channel <#${channelId}>`)
     return
   }
-  if (!channel.isText()) {
+  if (channel.type !== ChannelType.GuildText) {
     await message.reply(
       `<#${channelId}> is not a channel with messages you fool`
     )
@@ -33,7 +33,11 @@ export async function getSource (
     // If the message might be too long for an embed or can't be contained in a
     // code block or has custom emoji, upload a text file
     files: useFile
-      ? [new MessageAttachment(Buffer.from(msg.content), 'message.txt')]
+      ? [
+          new AttachmentBuilder(Buffer.from(msg.content), {
+            name: 'message.txt'
+          })
+        ]
       : undefined,
     embeds: useFile
       ? undefined

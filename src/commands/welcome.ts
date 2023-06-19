@@ -1,4 +1,10 @@
-import { DMChannel, GuildMember, Message, TextChannel } from 'discord.js'
+import {
+  DMChannel,
+  GuildMember,
+  Message,
+  PermissionFlagsBits,
+  TextChannel
+} from 'discord.js'
 
 import CachedMap from '../utils/CachedMap'
 import ok from '../utils/ok'
@@ -29,7 +35,11 @@ export async function setWelcome (
     await message.reply('no dms')
     return
   }
-  if (!message.channel.permissionsFor(message.member!).has('MANAGE_GUILD')) {
+  if (
+    !message.channel
+      .permissionsFor(message.member!)
+      .has(PermissionFlagsBits.ManageGuild)
+  ) {
     await message.reply(
       'why should i obey you if you cant even manage the server lmao'
     )
