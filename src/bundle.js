@@ -84,6 +84,10 @@ class CachedMap {
         this.#object[id] = value;
         return this;
     }
+    delete(id) {
+        delete this.#object[id];
+        return this;
+    }
     entries() {
         return Object.entries(this.#object);
     }
@@ -97,7 +101,7 @@ const emojiRegex = new RegExp(`<a?:\\w+:(\\d+)>|${emojiList.join('|').replace(/[
 var ok = ['👌', '🆗', '👍', '✅'];
 
 const pollChannels = new CachedMap('./data/poll-reactions.json');
-const onReady$4 = pollChannels.read;
+const onReady$5 = pollChannels.read;
 function isPollChannel(message) {
     return pollChannels.get(message.channel.id, false);
 }
@@ -110,7 +114,9 @@ async function pollChannel(message) {
         await message.reply("who're you polling in here just me and you??");
         return;
     }
-    if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
+    if (!message.channel
+        .permissionsFor(message.member)
+        .has(discord_js.PermissionFlagsBits.ManageChannels)) {
         await message.reply("you can't even manage channels, why should i listen to you");
         return;
     }
@@ -132,7 +138,9 @@ async function notPollChannel(message) {
         await message.reply("who're you polling in here just me and you??");
         return;
     }
-    if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
+    if (!message.channel
+        .permissionsFor(message.member)
+        .has(discord_js.PermissionFlagsBits.ManageChannels)) {
         await message.reply("you can't even manage channels, why should i listen to you");
         return;
     }
@@ -170,7 +178,7 @@ async function getSource(message, [messageId, channelId = message.channel.id]) {
         await message.reply(`can't get channel <#${channelId}>`);
         return;
     }
-    if (!channel.isText()) {
+    if (!channel.isTextBased()) {
         await message.reply(`<#${channelId}> is not a channel with messages you fool`);
         return;
     }
@@ -188,7 +196,11 @@ async function getSource(message, [messageId, channelId = message.channel.id]) {
         // If the message might be too long for an embed or can't be contained in a
         // code block or has custom emoji, upload a text file
         files: useFile
-            ? [new discord_js.MessageAttachment(Buffer.from(msg.content), 'message.txt')]
+            ? [
+                new discord_js.AttachmentBuilder(Buffer.from(msg.content), {
+                    name: 'message.txt'
+                })
+            ]
             : undefined,
         embeds: useFile
             ? undefined
@@ -222,14 +234,16 @@ async function getDate(message, [id = message.author.id]) {
 
 const welcomeChannels = new CachedMap('./data/welcome-channels.json');
 const sentienceMsgSent = new CachedMap('./data/sentience-msg-sent.json');
-const onReady$3 = () => Promise.all([welcomeChannels.read(), sentienceMsgSent.read()]);
+const onReady$4 = () => Promise.all([welcomeChannels.read(), sentienceMsgSent.read()]);
 async function setWelcome(message, [channelId, welcomeMsg]) {
     if (message.channel instanceof discord_js.DMChannel ||
         message.channel.lastMessageId === undefined) {
         await message.reply('no dms');
         return;
     }
-    if (!message.channel.permissionsFor(message.member).has('MANAGE_GUILD')) {
+    if (!message.channel
+        .permissionsFor(message.member)
+        .has(discord_js.PermissionFlagsBits.ManageGuild)) {
         await message.reply('why should i obey you if you cant even manage the server lmao');
         return;
     }
@@ -293,14 +307,16 @@ async function onMessage$2(message) {
 
 const lockdownCategories = new CachedMap('./data/lockdown-cats.json');
 const lockdownVotes = new CachedMap('./data/lockdown-votes.json');
-const onReady$2 = () => Promise.all([lockdownCategories.read(), lockdownVotes.read()]);
+const onReady$3 = () => Promise.all([lockdownCategories.read(), lockdownVotes.read()]);
 async function setLockdownCategory(message, [categoryId]) {
     if (message.channel instanceof discord_js.DMChannel ||
         message.channel.lastMessageId === undefined) {
         await message.reply('no dms');
         return;
     }
-    if (!message.channel.permissionsFor(message.member).has('MANAGE_CHANNELS')) {
+    if (!message.channel
+        .permissionsFor(message.member)
+        .has(discord_js.PermissionFlagsBits.ManageChannels)) {
         await message.reply('lol first show me that you can manage chanenls then we talk');
         return;
     }
@@ -339,9 +355,7 @@ async function voteLockdown(message) {
     if (votes.length >= MIN_VOTES) {
         const success = await category.permissionOverwrites
             .resolve(message.guild.roles.everyone.id)
-            .edit({
-            VIEW_CHANNEL: null
-        }, 'Democracy voted to lock the channel.')
+            .edit({ ViewChannel: null }, 'Democracy voted to lock the channel.')
             .then(() => true)
             .catch(() => false);
         await message.channel.send(success
@@ -354,7 +368,7 @@ async function voteLockdown(message) {
 }
 
 const mentionCache = new CachedMap('./data/mentions.json');
-const onReady$1 = mentionCache.read;
+const onReady$2 = mentionCache.read;
 async function onMessage$1(message) {
     const { channel: { id: channelId }, mentions } = message;
     if (mentions.everyone || mentions.roles.size > 0 || mentions.users.size > 0) {
@@ -490,7 +504,7 @@ async function avatar(message, [userId = message.author.id]) {
             embeds: [
                 {
                     image: {
-                        url: user.displayAvatarURL({ format: 'png', size: 4096 })
+                        url: user.displayAvatarURL({ extension: 'png', size: 4096 })
                     }
                 }
             ]
@@ -511,13 +525,15 @@ async function avatar(message, [userId = message.author.id]) {
     }
 }
 
-async function getServerStatus(address) {
-    const [host, port = '25565'] = address.split(':');
-    const client = await mcproto.Client.connect(host, +port);
+const DEFAULT_PORT = '25565';
+const EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 7;
+const CHECK_FREQ = 1000 * 60 * 5;
+async function getServerStatus(host, port) {
+    const client = await mcproto.Client.connect(host, port);
     client.send(new mcproto.PacketWriter(0x0)
         .writeVarInt(404)
         .writeString(host)
-        .writeUInt16(+port)
+        .writeUInt16(port)
         .writeVarInt(mcproto.State.Status));
     client.send(new mcproto.PacketWriter(0x0));
     const response = await client.nextPacket(0x0);
@@ -527,7 +543,8 @@ async function getServerStatus(address) {
 }
 async function serverStatus(message, [address]) {
     try {
-        const { online, max, players, version } = await getServerStatus(address);
+        const [host, port = DEFAULT_PORT] = address.split(':');
+        const { online, max, players, version } = await getServerStatus(host, +port);
         await message.reply({
             content: select([
                 'fomo time?',
@@ -571,6 +588,102 @@ async function serverStatus(message, [address]) {
                 }
             ]
         });
+    }
+}
+function createEmbed(suffix = '', color) {
+    return ({ id, name }) => ({
+        author: {
+            name: name + suffix,
+            icon_url: `https://cravatar.eu/helmavatar/${id}/64.png`
+        },
+        color
+    });
+}
+async function check(channel, info, state, start = false) {
+    if (Date.now() > info.start + EXPIRATION_TIME) {
+        clearInterval(state.timeoutId);
+        trackChannels.delete(channel.id).save();
+        delete states[channel.id];
+        await channel.send({
+            content: `It has now been <t:${Math.floor(info.start / 1000)}:R> when you asked me to start tracking your server. In case you've stopped playing, I'm going to stop tracking the server now.`,
+            embeds: [
+                {
+                    description: `If you would like to continue tracking, reply to this message with \`track: ${info.host}:${info.port}\``
+                }
+            ]
+        });
+        return;
+    }
+    const { online, max, players } = await getServerStatus(info.host, info.port).catch(() => ({
+        online: 0,
+        max: -1,
+        players: [],
+        version: ''
+    }));
+    const embeds = start
+        ? players.map(createEmbed(' was already on.'))
+        : [
+            // Joined
+            ...players
+                .filter(({ id }) => !state.lastPlayers.some(p => p.id === id))
+                .map(createEmbed(' joined the game.', 0x22c55e)),
+            // Left
+            ...state.lastPlayers
+                ?.filter(({ id }) => !players.some(p => p.id === id))
+                .map(createEmbed(' left the game.', 0xef4444))
+        ];
+    if (start || embeds.length > 0) {
+        await channel.send({
+            content: `${online}/${Math.max(max, 0)} players are on now. I check again <t:${Math.floor((Date.now() + CHECK_FREQ) / 1000)}:R>.${max === -1 ? ' **NOTE: Server is offline.**' : ''}`,
+            embeds
+        });
+    }
+    state.lastPlayers = players;
+}
+const trackChannels = new CachedMap('./data/minecraft-track.json');
+const onReady$1 = trackChannels.read;
+const states = {};
+async function init(client) {
+    await Promise.all(trackChannels.entries().map(async ([channelId, info]) => {
+        const channel = await client.channels.fetch(channelId);
+        if (channel?.isTextBased()) {
+            states[channelId] = {
+                lastPlayers: [],
+                timeoutId: setInterval(() => {
+                    check(channel, info, states[channelId]);
+                }, CHECK_FREQ)
+            };
+            await check(channel, info, states[channelId], true);
+        }
+    }));
+}
+async function track(message, [address]) {
+    if (states[message.channel.id]) {
+        clearInterval(states[message.channel.id].timeoutId);
+    }
+    if (address) {
+        const [host, port = DEFAULT_PORT] = address.split(':');
+        const state = {
+            lastPlayers: [],
+            timeoutId: setInterval(() => {
+                check(message.channel, info, state);
+            }, CHECK_FREQ)
+        };
+        const info = {
+            host,
+            port: +port,
+            start: Date.now()
+        };
+        trackChannels.set(message.channel.id, info).save();
+        states[message.channel.id] = state;
+        await check(message.channel, info, state, true);
+    }
+    else {
+        const info = trackChannels.get(message.channel.id);
+        await message.reply(info
+            ? 'ok i will stop tracking'
+            : "i don't think i was tracking a server. put the server url after the colon, like `track: yourmom.com`");
+        trackChannels.delete(message.channel.id).save();
     }
 }
 
@@ -632,7 +745,7 @@ async function isMenu(message) {
     // Author of select role menu must be present and able to add roles manually
     return message.guild.members
         .fetch(message.author)
-        .then(member => member.permissions.has('MANAGE_ROLES'))
+        .then(member => member.permissions.has(discord_js.PermissionFlagsBits.ManageRoles))
         .catch(() => false);
 }
 const roleMentionRegex = /<@&(\d+)>/;
@@ -670,7 +783,7 @@ async function onReact(reaction, user, added) {
     const menuAuthor = await message.guild.members
         .fetch(message.author)
         .catch(() => null);
-    if (!menuAuthor?.permissions.has('MANAGE_ROLES')) {
+    if (!menuAuthor?.permissions.has(discord_js.PermissionFlagsBits.ManageRoles)) {
         return;
     }
     const roles = parseMenu(message.content);
@@ -891,6 +1004,9 @@ const commands = {
     'whats my pfp': avatar,
     'status:': serverStatus,
     'who is on the minecraft server:': serverStatus,
+    'track:': track,
+    'track minecraft server:': track,
+    'stop tracking': track,
     'this is a poll channel': pollChannel,
     'turn on poll channel mode which auto-adds reactions to messages': pollChannel,
     'poll channel': pollChannel,
@@ -918,13 +1034,14 @@ const commands = {
     ...ownerCommands
 };
 const client = new discord_js.Client({
-    partials: ['CHANNEL', 'MESSAGE', 'REACTION'],
+    partials: [discord_js.Partials.Channel, discord_js.Partials.Message, discord_js.Partials.Reaction],
     intents: [
-        discord_js.Intents.FLAGS.GUILDS,
-        discord_js.Intents.FLAGS.GUILD_MESSAGES,
-        discord_js.Intents.FLAGS.GUILD_MEMBERS,
-        discord_js.Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
-        discord_js.Intents.FLAGS.DIRECT_MESSAGES
+        discord_js.GatewayIntentBits.Guilds,
+        discord_js.GatewayIntentBits.GuildMessages,
+        discord_js.GatewayIntentBits.GuildMembers,
+        discord_js.GatewayIntentBits.GuildMessageReactions,
+        discord_js.GatewayIntentBits.DirectMessages,
+        discord_js.GatewayIntentBits.MessageContent
     ]
 });
 client.on('messageCreate', async (message) => {
@@ -1017,13 +1134,15 @@ process.on('unhandledRejection', reason => {
 });
 fs.ensureDir('./data/')
     .then(() => Promise.all([
+    onReady$5(),
     onReady$4(),
     onReady$3(),
     onReady$2(),
-    onReady$1(),
-    onReady()
+    onReady(),
+    onReady$1()
 ]))
     .then(() => client.login(process.env.TOKEN))
+    .then(() => init(client))
     .catch(err => {
     console.error(err);
     process.exit(1);
