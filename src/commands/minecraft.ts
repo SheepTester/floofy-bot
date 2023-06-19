@@ -138,9 +138,12 @@ async function check (
     await channel.send({
       content: `It has now been <t:${Math.floor(
         info.start / 1000
-      )}:R> when you asked me to start tracking your server. In case you've stopped playing, I'm going to stop tracking the server now.\n\nIf you would like to continue tracking, reply to this message with \`track: ${
-        info.host
-      }:${info.port}\``
+      )}:R> when you asked me to start tracking your server. In case you've stopped playing, I'm going to stop tracking the server now.`,
+      embeds: [
+        {
+          description: `If you would like to continue tracking, reply to this message with \`track: ${info.host}:${info.port}\``
+        }
+      ]
     })
     return
   }
