@@ -23,7 +23,10 @@ type ServerStatus = {
 type TrackInfo = {
   host: string
   port: number
-  endDate: number
+  start: number
+}
+
+type TrackState = {
   lastPlayers: Player[]
   timeoutId: ReturnType<typeof setInterval>
 }
@@ -125,10 +128,20 @@ function createEmbed (
 async function check (
   channel: TextBasedChannel,
   info: TrackInfo,
+  state: TrackState,
   start = false
 ): Promise<void> {
-  if (Date.now() > info.endDate) {
-    trackChannels.delete(channel.id)
+  if (Date.now() > info.start + EXPIRATION_TIME) {
+    clearInterval(state.timeoutId)
+    trackChannels.delete(channel.id).save()
+    delete states[channel.id]
+    await channel.send({
+      content: `It has now been <t:${Math.floor(
+        info.start / 1000
+      )}:R> when you asked me to start tracking your server. In case you've stopped playing, I'm going to stop tracking the server now.\n\nIf you would like to continue tracking, reply to this message with \`track: ${
+        info.host
+      }:${info.port}\``
+    })
     return
   }
   const { online, max, players } = await getServerStatus(
@@ -147,11 +160,11 @@ async function check (
     : [
         // Joined
         ...players
-          .filter(id => !info.lastPlayers.includes(id))
+          .filter(({ id }) => !state.lastPlayers.some(p => p.id === id))
           .map(createEmbed(' joined the game.', 0x22c55e)),
         // Left
-        ...info.lastPlayers
-          ?.filter(id => !players.includes(id))
+        ...state.lastPlayers
+          ?.filter(({ id }) => !players.some(p => p.id === id))
           .map(createEmbed(' left the game.', 0xef4444))
       ]
   if (start || embeds.length > 0) {
@@ -165,44 +178,57 @@ async function check (
       embeds
     })
   }
-  info.lastPlayers = players
+  state.lastPlayers = players
 }
 
 const trackChannels = new CachedMap<TrackInfo>('./data/minecraft-track.json')
 export const onReady = trackChannels.read
+const states: Record<string, TrackState> = {}
 
 export async function init (client: DiscordClient): Promise<void> {
   await Promise.all(
     trackChannels.entries().map(async ([channelId, info]) => {
-      info.lastPlayers = []
-      const channel = client.channels.resolve(channelId)
+      const channel = await client.channels.fetch(channelId)
       if (channel?.isTextBased()) {
-        await check(channel, info, true)
-        info.timeoutId = setInterval(() => {
-          check(channel, info)
-        }, CHECK_FREQ)
+        states[channelId] = {
+          lastPlayers: [],
+          timeoutId: setInterval(() => {
+            check(channel, info, states[channelId])
+          }, CHECK_FREQ)
+        }
+        await check(channel, info, states[channelId], true)
       }
     })
   )
 }
 
 export async function track (message: Message, [address]: string[]) {
+  if (states[message.channel.id]) {
+    clearInterval(states[message.channel.id].timeoutId)
+  }
   if (address) {
     const [host, port = DEFAULT_PORT] = address.split(':')
-    const oldInfo = trackChannels.get(message.channel.id)
-    if (oldInfo) {
-      clearInterval(oldInfo.timeoutId)
+    const state: TrackState = {
+      lastPlayers: [],
+      timeoutId: setInterval(() => {
+        check(message.channel, info, state)
+      }, CHECK_FREQ)
     }
     const info: TrackInfo = {
       host,
       port: +port,
-      endDate: Date.now() + EXPIRATION_TIME,
-      lastPlayers: [],
-      timeoutId: setInterval(() => {
-        check(message.channel, info)
-      }, CHECK_FREQ)
+      start: Date.now()
     }
-    trackChannels.set(message.channel.id, info)
-    await check(message.channel, info, true)
+    trackChannels.set(message.channel.id, info).save()
+    states[message.channel.id] = state
+    await check(message.channel, info, state, true)
+  } else {
+    const info = trackChannels.get(message.channel.id)
+    await message.reply(
+      info
+        ? 'ok i will stop tracking'
+        : "i don't think i was tracking a server. put the server url after the colon, like `track: yourmom.com`"
+    )
+    trackChannels.delete(message.channel.id).save()
   }
 }
