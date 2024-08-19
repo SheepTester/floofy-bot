@@ -1,26 +1,37 @@
-import { Message, AttachmentBuilder, ChannelType } from 'discord.js'
+import { Message, AttachmentBuilder } from 'discord.js'
 import select from '../utils/select'
 
-export async function getSource (
+async function getMessage (
   message: Message,
   [messageId, channelId = message.channel.id]: string[]
-): Promise<void> {
+): Promise<Message | null> {
   const channel = await message.client.channels
     .fetch(channelId)
     .catch(() => null)
   if (!channel) {
     await message.reply(`can't get channel <#${channelId}>`)
-    return
+    return null
   }
   if (!channel.isTextBased()) {
     await message.reply(
       `<#${channelId}> is not a channel with messages you fool`
     )
-    return
+    return null
   }
   const msg = await channel.messages.fetch(messageId).catch(() => null)
   if (!msg) {
     await message.reply(`can't get the message with id ${messageId}`)
+    return null
+  }
+  return msg
+}
+
+export async function getSource (
+  message: Message,
+  args: string[]
+): Promise<void> {
+  const msg = await getMessage(message, args)
+  if (!msg) {
     return
   }
   const useFile =
@@ -61,6 +72,40 @@ export const getSourceFlipped = async (
   message: Message,
   [channelId, messageId]: string[]
 ) => getSource(message, [messageId, channelId])
+
+export async function getReply (
+  message: Message,
+  args: string[]
+): Promise<void> {
+  const msg = await getMessage(message, args)
+  if (!msg) {
+    return
+  }
+  const replied = msg.reference
+  if (!replied) {
+    await message.reply(
+      select([
+        'they werent replying to anything, look: {}',
+        'uhh {} isnt a reply ?',
+        'u sure thats a reply? {} cuz i dont see it'
+      ]).replace('{}', msg.url)
+    )
+    return
+  }
+  await message.reply(
+    select(['it was a reply to {}', 'they replied to {}', '{} here']).replace(
+      '{}',
+      `https://discord.com/channels/${replied.guildId ?? '@me'}/${
+        replied.channelId
+      }/${replied.messageId}`
+    )
+  )
+}
+
+export const getReplyFlipped = async (
+  message: Message,
+  [channelId, messageId]: string[]
+) => getReply(message, [messageId, channelId])
 
 export async function getDate (
   message: Message,

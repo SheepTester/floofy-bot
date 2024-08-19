@@ -73,6 +73,13 @@ const commands: Record<string, Command> = {
     cmd.source.getSourceFlipped,
   'get source of <id>-<id>': cmd.source.getSourceFlipped,
 
+  'unreply <id>': cmd.source.getReply,
+  'get message that <id> replied to in this channel': cmd.source.getReply,
+  'get message that <id> replied to in channel <id>': cmd.source.getReply,
+  'unreply <id>-<id>': cmd.source.getReplyFlipped,
+  'get message that message in channel <id> with id <id> replied to':
+    cmd.source.getReplyFlipped,
+
   'how old is <id>': cmd.source.getDate,
   'when was <id> created': cmd.source.getDate,
   'when did i join discord': cmd.source.getDate,
