@@ -102,20 +102,23 @@ async function onEmojiData (
 
 const html = await fetch('https://discord.com/channels/@me').then(r => r.text())
 
-for (const match of html.matchAll(/<script src="(\/assets\/[a-z0-9]+\.js)"/g)) {
+for (const match of html.matchAll(
+  /<script src="(\/assets\/[a-z0-9.]+\.js)"/g
+)) {
   const js = await fetch(new URL(match[1], 'https://discord.com')).then(r =>
     r.text()
   )
-  const sheepIndex = js.indexOf('sheep')
-  if (sheepIndex !== -1) {
-    const result = Emoji.safeParse(
-      JSON.parse(
-        js.slice(
-          js.lastIndexOf("'", sheepIndex) + 1,
-          js.indexOf("'", sheepIndex)
-        )
+  // Word boundaries are needed to avoid the profanity list, which contains
+  // 'sheep*ucker'
+  const sheep = js.match(/\bsheep\b/)
+  if (sheep) {
+    const json = js
+      .slice(js.lastIndexOf("'", sheep.index) + 1, js.indexOf("'", sheep.index))
+      // hex escapes are used for the ñ in :piñata:
+      .replace(/\\x([0-9a-f]{2})/g, (_, hex) =>
+        String.fromCodePoint(parseInt(hex, 16))
       )
-    )
+    const result = Emoji.safeParse(JSON.parse(json))
     if (result.success) {
       await onEmojiData(result.data, 0)
     } else {

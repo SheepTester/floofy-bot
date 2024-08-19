@@ -13,7 +13,9 @@ npm start
 ## Develop
 
 ```sh
+# Directly runs TypeScript files
 npm run dev
+# Build to JS for deployment
 npm run build
 ```
 
