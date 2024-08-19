@@ -60,6 +60,17 @@ async function getServerStatus (
 }
 
 export async function serverStatus (message: Message, [address]: string[]) {
+  if (!address) {
+    const info = trackChannels.get(message.channel.id)
+    if (!info) {
+      await message.reply({
+        content:
+          'idk what address u want. i default to whatever you set `track:` to but it looks like you arent using that so 🤷'
+      })
+      return
+    }
+    address = `${info.host}:${info.port}`
+  }
   try {
     const [host, port = DEFAULT_PORT] = address.split(':')
     const { online, max, players, version } = await getServerStatus(host, +port)

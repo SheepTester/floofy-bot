@@ -101,6 +101,7 @@ const commands: Record<string, Command> = {
 
   'status:': cmd.minecraft.serverStatus,
   'who is on the minecraft server:': cmd.minecraft.serverStatus,
+  status: cmd.minecraft.serverStatus,
 
   'track:': cmd.minecraft.track,
   'track minecraft server:': cmd.minecraft.track,
