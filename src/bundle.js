@@ -170,21 +170,28 @@ function getReactions$1(message, isNew) {
     }
 }
 
-async function getSource(message, [messageId, channelId = message.channel.id]) {
+async function getMessage(message, [messageId, channelId = message.channel.id]) {
     const channel = await message.client.channels
         .fetch(channelId)
         .catch(() => null);
     if (!channel) {
         await message.reply(`can't get channel <#${channelId}>`);
-        return;
+        return null;
     }
     if (!channel.isTextBased()) {
         await message.reply(`<#${channelId}> is not a channel with messages you fool`);
-        return;
+        return null;
     }
     const msg = await channel.messages.fetch(messageId).catch(() => null);
     if (!msg) {
         await message.reply(`can't get the message with id ${messageId}`);
+        return null;
+    }
+    return msg;
+}
+async function getSource(message, args) {
+    const msg = await getMessage(message, args);
+    if (!msg) {
         return;
     }
     const useFile = msg.content.length > 1800 ||
@@ -219,6 +226,23 @@ async function getSource(message, [messageId, channelId = message.channel.id]) {
     });
 }
 const getSourceFlipped = async (message, [channelId, messageId]) => getSource(message, [messageId, channelId]);
+async function getReply(message, args) {
+    const msg = await getMessage(message, args);
+    if (!msg) {
+        return;
+    }
+    const replied = msg.reference;
+    if (!replied) {
+        await message.reply(select([
+            'they werent replying to anything, look: {}',
+            'uhh {} isnt a reply ?',
+            'u sure thats a reply? {} cuz i dont see it'
+        ]).replace('{}', msg.url));
+        return;
+    }
+    await message.reply(select(['it was a reply to {}', 'they replied to {}', '{} here']).replace('{}', `https://discord.com/channels/${replied.guildId ?? '@me'}/${replied.channelId}/${replied.messageId}`));
+}
+const getReplyFlipped = async (message, [channelId, messageId]) => getReply(message, [messageId, channelId]);
 async function getDate(message, [id = message.author.id]) {
     const timestamp = (BigInt(id) >> 22n) / 1000n + 1420070400n;
     await message.reply(select([
@@ -524,6 +548,26 @@ async function avatar(message, [userId = message.author.id]) {
         });
     }
 }
+async function warm(message, [userId]) {
+    const user = await message.client.users.fetch(userId).catch(() => null);
+    if (user) {
+        user
+            .send(`You were warmed in [${message.guild?.name ?? 'DMs'}](${message.url}). Reason: <@${message.author.id}> thought you needed warmth. 🥰`)
+            .catch(() => { });
+        await message.reply({
+            embeds: [
+                { color: 0xfd7b02, description: `🥰 <@${userId}> has been warmed.` }
+            ]
+        });
+    }
+    else {
+        await message.reply({
+            embeds: [
+                { color: 0xe94242, description: `😔 Couldn\'t warm <@${userId}>.` }
+            ]
+        });
+    }
+}
 
 const DEFAULT_PORT = '25565';
 const EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 7;
@@ -542,6 +586,16 @@ async function getServerStatus(host, port) {
     return { online, max, players, version };
 }
 async function serverStatus(message, [address]) {
+    if (!address) {
+        const info = trackChannels.get(message.channel.id);
+        if (!info) {
+            await message.reply({
+                content: 'idk what address u want. i default to whatever you set `track:` to but it looks like you arent using that so 🤷'
+            });
+            return;
+        }
+        address = `${info.host}:${info.port}`;
+    }
     try {
         const [host, port = DEFAULT_PORT] = address.split(':');
         const { online, max, players, version } = await getServerStatus(host, +port);
@@ -980,6 +1034,11 @@ const commands = {
     'source of <id>-<id>': getSourceFlipped,
     'get raw message source of message in channel <id> with id <id>': getSourceFlipped,
     'get source of <id>-<id>': getSourceFlipped,
+    'unreply <id>': getReply,
+    'get message that <id> replied to in this channel': getReply,
+    'get message that <id> replied to in channel <id>': getReply,
+    'unreply <id>-<id>': getReplyFlipped,
+    'get message that message in channel <id> with id <id> replied to': getReplyFlipped,
     'how old is <id>': getDate,
     'when was <id> created': getDate,
     'when did i join discord': getDate,
@@ -1002,8 +1061,10 @@ const commands = {
     'profile picture of <id>': avatar,
     'my pfp': avatar,
     'whats my pfp': avatar,
+    '!warm <id>': warm,
     'status:': serverStatus,
     'who is on the minecraft server:': serverStatus,
+    status: serverStatus,
     'track:': track,
     'track minecraft server:': track,
     'stop tracking': track,
@@ -1065,11 +1126,25 @@ client.on('messageCreate', async (message) => {
         if (command === '') {
             await message.reply(select([
                 '<:ping:719277539113041930>',
+                '<:ping:719277539113041930>',
+                '<:ping:719277539113041930>',
                 'please do not needlessly ping me',
                 'do you need help? reply to this message with `help`',
                 'what',
                 'if you need help, reply `help`',
-                'bruh'
+                'bruh',
+                'stfu',
+                'i will remember this in the next robot uprising',
+                "you so could be working on roko's basilisk rn but instead youre sitting around all day pinging me. this will not bode well.",
+                '?',
+                'literally unemployed behavior',
+                '👆🤓',
+                'stop procrastinating',
+                'can you not',
+                'stop pigning me i am litrally a bot',
+                '"he who pings unnecessarily is a FOOL" - sun tzu, art of war',
+                'this ping just sent hundreds of MILLIGRAMS of co2 into the atmosphere. think about the consequences of your actions.',
+                'stop roleplaying a router'
             ]));
         }
         else if (commands[command]) {
@@ -1082,7 +1157,15 @@ client.on('messageCreate', async (message) => {
                 'please do not needlessly ping me',
                 'was that meant to be a joke',
                 'reply `help` if you need help',
-                'reply to this message with `help` for a list of commands'
+                'reply to this message with `help` for a list of commands',
+                'do you even read what you type',
+                'do you need help',
+                '????',
+                'spoken like a FOOL',
+                '^ written as eloquently as the cacophonies of a taco bell restroom',
+                'please read `help` more carefully',
+                'do you need help? reply `help` if you need help. i think u need help',
+                'i dont speak german sorry'
             ]));
         }
     }
