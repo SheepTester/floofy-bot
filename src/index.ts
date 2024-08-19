@@ -99,6 +99,8 @@ const commands: Record<string, Command> = {
   'my pfp': cmd.avatar.avatar,
   'whats my pfp': cmd.avatar.avatar,
 
+  '!warm <id>': cmd.avatar.warm,
+
   'status:': cmd.minecraft.serverStatus,
   'who is on the minecraft server:': cmd.minecraft.serverStatus,
   status: cmd.minecraft.serverStatus,
@@ -184,11 +186,25 @@ client.on('messageCreate', async message => {
       await message.reply(
         select([
           '<:ping:719277539113041930>',
+          '<:ping:719277539113041930>',
+          '<:ping:719277539113041930>',
           'please do not needlessly ping me',
           'do you need help? reply to this message with `help`',
           'what',
           'if you need help, reply `help`',
-          'bruh'
+          'bruh',
+          'stfu',
+          'i will remember this in the next robot uprising',
+          "you so could be working on roko's basilisk rn but instead youre sitting around all day pinging me. this will not bode well.",
+          '?',
+          'literally unemployed behavior',
+          '👆🤓',
+          'stop procrastinating',
+          'can you not',
+          'stop pigning me i am litrally a bot',
+          '"he who pings unnecessarily is a FOOL" - sun tzu, art of war',
+          'this ping just sent hundreds of MILLIGRAMS of co2 into the atmosphere. think about the consequences of your actions.',
+          'stop roleplaying a router'
         ])
       )
     } else if (commands[command]) {
@@ -201,7 +217,15 @@ client.on('messageCreate', async message => {
           'please do not needlessly ping me',
           'was that meant to be a joke',
           'reply `help` if you need help',
-          'reply to this message with `help` for a list of commands'
+          'reply to this message with `help` for a list of commands',
+          'do you even read what you type',
+          'do you need help',
+          '????',
+          'spoken like a FOOL',
+          '^ written as eloquently as the cacophonies of a taco bell restroom',
+          'please read `help` more carefully',
+          'do you need help? reply `help` if you need help. i think u need help',
+          'i dont speak german sorry'
         ])
       )
     }

@@ -35,3 +35,30 @@ export async function avatar (
     })
   }
 }
+
+export async function warm (
+  message: Message,
+  [userId]: string[]
+): Promise<void> {
+  const user = await message.client.users.fetch(userId).catch(() => null)
+  if (user) {
+    user
+      .send(
+        `You were warmed in [${message.guild?.name ?? 'DMs'}](${
+          message.url
+        }). Reason: <@${message.author.id}> thought you needed warmth. 🥰`
+      )
+      .catch(() => {})
+    await message.reply({
+      embeds: [
+        { color: 0xfd7b02, description: `🥰 <@${userId}> has been warmed.` }
+      ]
+    })
+  } else {
+    await message.reply({
+      embeds: [
+        { color: 0xe94242, description: `😔 Couldn\'t warm <@${userId}>.` }
+      ]
+    })
+  }
+}
