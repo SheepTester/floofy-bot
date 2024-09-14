@@ -1105,7 +1105,7 @@ const client = new discord_js.Client({
         discord_js.GatewayIntentBits.MessageContent
     ]
 });
-client.on('messageCreate', async (message) => {
+async function handleMessage(message) {
     if (ignoring !== null) {
         if (message.author.id === process.env.OWNER &&
             message.content === ignoring) {
@@ -1177,6 +1177,9 @@ client.on('messageCreate', async (message) => {
     if (reactions) {
         await Promise.all(reactions.map(em => message.react(em))).catch(() => { });
     }
+}
+client.on('messageCreate', message => {
+    handleMessage(message);
 });
 client.on('messageUpdate', async (_oldMessage, newMessage) => {
     if (ignoring !== null) {
@@ -1214,6 +1217,13 @@ client.on('messageReactionRemove', async (reaction, user) => {
 });
 process.on('unhandledRejection', reason => {
     console.error(reason);
+});
+process.on('uncaughtException', reason => {
+    console.error(reason);
+    console.error('uncaughtException fired, so I will now commit exit(1)');
+    // https://stackoverflow.com/a/40867663 This event means that something fatal
+    // has happened
+    process.exit(1);
 });
 fs.ensureDir('./data/')
     .then(() => Promise.all([
