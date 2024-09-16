@@ -116,6 +116,11 @@ const commands: Record<string, Command> = {
   'track minecraft server:': cmd.minecraft.track,
   'stop tracking': cmd.minecraft.track,
 
+  'florida man': cmd.ucpd.showReport,
+  'florida man:': cmd.ucpd.showReport,
+  'show latest ucpd report': cmd.ucpd.showReport,
+  'show ucpd reports for:': cmd.ucpd.showReport,
+
   'this is a poll channel': cmd.pollReactions.pollChannel,
   'turn on poll channel mode which auto-adds reactions to messages':
     cmd.pollReactions.pollChannel,

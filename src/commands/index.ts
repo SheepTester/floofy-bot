@@ -7,6 +7,7 @@ export * as avatar from './avatar'
 export * as minecraft from './minecraft'
 export * as emojiUsage from './emoji-usage'
 export * as reactionRoles from './reaction-roles'
+export * as ucpd from './ucpd'
 
 export * as about from './about'
 export * as ignore from './ignore-us'

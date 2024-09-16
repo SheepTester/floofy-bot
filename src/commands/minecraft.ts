@@ -116,6 +116,7 @@ export async function serverStatus (message: Message, [address]: string[]) {
       content: select(['problem!', "can't connect!", 'oopsie doopsie']),
       embeds: [
         {
+          color: 0xe94242,
           description: error instanceof Error ? error.message : String(error)
         }
       ]
