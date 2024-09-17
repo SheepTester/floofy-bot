@@ -1,1 +1,1 @@
-require('./src/bundle.js')
+import('./src/bundle.mjs')

@@ -10,13 +10,5 @@
     "resolveJsonModule": true
   },
   "$schema": "https://json.schemastore.org/tsconfig",
-  "display": "Recommended",
-  "exclude": [
-    "./scripts/"
-  ],
-  "ts-node": {
-    "compilerOptions": {
-      "module": "CommonJS"
-    }
-  }
+  "exclude": ["./scripts/"]
 }

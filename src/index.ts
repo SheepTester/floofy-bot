@@ -1,11 +1,11 @@
-require('dotenv').config()
-
 import { Client, GatewayIntentBits, Message, Partials } from 'discord.js'
+import { config } from 'dotenv'
 import fs from 'fs-extra'
-
+import * as cmd from './commands'
 import parseCommand from './utils/parseCommand'
 import select from './utils/select'
-import * as cmd from './commands'
+
+config()
 
 type Command = (message: Message, args: string[]) => Promise<void>
 

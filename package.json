@@ -4,8 +4,8 @@
   "description": "A simple Discord bot made with Discord.js for personal use",
   "main": "index.js",
   "scripts": {
-    "build": "rollup --config rollup.config.ts --configPlugin typescript",
-    "dev": "ts-node src/index.ts",
+    "build": "esbuild src/index.ts --format=esm --platform=node --bundle --packages=external --outfile=src/bundle.mjs",
+    "dev": "npm run build && npm start",
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -27,10 +27,8 @@
     "pdfjs-dist": "^4.6.82"
   },
   "devDependencies": {
-    "@rollup/plugin-typescript": "^9.0.2",
     "@types/fs-extra": "^9.0.13",
-    "rollup": "^3.2.3",
-    "ts-node": "^10.9.1"
+    "esbuild": "^0.23.1"
   },
   "optionalDependencies": {
     "node-windows": "^1.0.0-beta.8"
