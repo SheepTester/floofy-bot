@@ -1,8 +1,9 @@
 // From https://github.com/SheepTester/ucsd-event-scraper/blob/main/explore/police/parse.ts
 
-import { Message } from 'discord.js'
+import { APIEmbed, Client, Message } from 'discord.js'
 import { getDocument, VerbosityLevel } from 'pdfjs-dist'
 import select from '../utils/select'
+import CachedMap from '../utils/CachedMap'
 
 type TextObject = {
   content: string
@@ -154,6 +155,7 @@ export async function showReport (message: Message, [fileName]: string[]) {
     fileName += '.pdf'
   }
   try {
+    const description = display(await getReports(fileName))
     await message.reply({
       content: select([
         'oh look i did that',
@@ -163,11 +165,14 @@ export async function showReport (message: Message, [fileName]: string[]) {
       embeds: [
         {
           title: fileName,
-          description: display(await getReports(fileName))
+          url: BASE_URL + encodeURIComponent(fileName),
+          description,
+          footer: { text: `${description.length} chars` }
         }
       ]
     })
   } catch (error) {
+    const fileNames = await getFileNames().catch(() => null)
     await message.reply({
       content: select([
         'i shat my pants',
@@ -178,8 +183,118 @@ export async function showReport (message: Message, [fileName]: string[]) {
         {
           color: 0xe94242,
           description: error instanceof Error ? error.message : String(error)
+        },
+        {
+          description: `**Available files**\n${
+            fileNames?.join('\n') ?? '(failed to load)'
+          }`
         }
       ]
     })
+  }
+}
+
+const trackChannels = new CachedMap<1>('./data/ucpd-track.json')
+const seen = new CachedMap<1>('./data/ucpd-seen.json')
+export const onReady = () => Promise.all([trackChannels.read(), seen.read()])
+
+/** 2.13 hours */
+const CHECK_FREQ = 2.13 * 60 * 60 * 1000
+
+export function init (client: Client): void {
+  setInterval(async () => {
+    const channels = trackChannels.entries()
+    if (channels.length === 0) {
+      return
+    }
+    const unseen = (await getFileNames()).filter(
+      fileName => !seen.get(fileName)
+    )
+    if (unseen.length === 0) {
+      return
+    }
+    const description = display(await getReports(unseen[0]))
+    const embeds: APIEmbed[] = [
+      {
+        title: unseen[0],
+        url: BASE_URL + encodeURIComponent(unseen[0]),
+        description,
+        footer: {
+          text: `${description.length} chars · To turn off, reply "i renounce my life of crime"`
+        }
+      }
+    ]
+    if (unseen.length > 1) {
+      embeds.push({
+        title: 'Multiple crime logs just dropped',
+        description: `Reply \`florida man:\` followed by the date:\n${unseen.join(
+          '\n'
+        )}`
+      })
+    }
+    for (const fileName of unseen) {
+      seen.set(fileName, 1)
+    }
+    await seen.save()
+    for (const [channelId] of channels) {
+      const channel = await client.channels.fetch(channelId)
+      if (!channel?.isTextBased()) {
+        continue
+      }
+      await channel.send({
+        content: select([
+          'who did this',
+          'exposed',
+          'did u do this',
+          'this reminds me of u',
+          'inspirational 😍',
+          'live love LIE',
+          'i knew its not the trolley its YOU'
+        ]),
+        embeds
+      })
+    }
+  }, CHECK_FREQ)
+}
+
+export async function track (message: Message): Promise<void> {
+  if (trackChannels.has(message.channel.id)) {
+    await message.reply(
+      select([
+        'oh i thought you all were already criminals',
+        'arent you already learning crime',
+        'yeah yeah ill tell you too'
+      ])
+    )
+  } else {
+    await trackChannels.set(message.channel.id, 1).save()
+    await message.reply(
+      select([
+        'ok when crime happens i will tell you',
+        'ill check in on ucpd every once in a while and if they have new lessons available i shall send em here',
+        'when ucpd releases their crime logs ill put them here'
+      ])
+    )
+  }
+}
+
+export async function untrack (message: Message): Promise<void> {
+  if (trackChannels.has(message.channel.id)) {
+    await trackChannels.delete(message.channel.id).save()
+    await message.reply(
+      select([
+        'i guess you got tired of seeing those crime logs',
+        'okay fine, next think you know youll be saying how the trolley is making the campus unsafe or soemthing silly',
+        'ignorance is bliss'
+      ])
+    )
+  } else {
+    await message.reply(
+      select([
+        'cool but you didnt need to tell me that',
+        'cool story bro',
+        'ok lol'
+      ])
+    )
   }
 }

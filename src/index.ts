@@ -121,6 +121,12 @@ const commands: Record<string, Command> = {
   'show latest ucpd report': cmd.ucpd.showReport,
   'show ucpd reports for:': cmd.ucpd.showReport,
 
+  'teach me crime': cmd.ucpd.track,
+  'enable ucpd reports in this channel': cmd.ucpd.track,
+
+  'i renounce my life of crime': cmd.ucpd.untrack,
+  'disable ucpd reports in this channel': cmd.ucpd.untrack,
+
   'this is a poll channel': cmd.pollReactions.pollChannel,
   'turn on poll channel mode which auto-adds reactions to messages':
     cmd.pollReactions.pollChannel,
@@ -317,11 +323,12 @@ fs.ensureDir('./data/')
       cmd.voteLockdown.onReady(),
       cmd.mentions.onReady(),
       cmd.emojiUsage.onReady(),
-      cmd.minecraft.onReady()
+      cmd.minecraft.onReady(),
+      cmd.ucpd.onReady()
     ])
   )
   .then(() => client.login(process.env.TOKEN))
-  .then(() => cmd.minecraft.init(client))
+  .then(() => Promise.all([cmd.minecraft.init(client), cmd.ucpd.init(client)]))
   .catch(err => {
     console.error(err)
     process.exit(1)

@@ -4566,7 +4566,11 @@ async function onReact2(reaction, user, added) {
 // src/commands/ucpd.ts
 var ucpd_exports = {};
 __export(ucpd_exports, {
-  showReport: () => showReport
+  init: () => init2,
+  onReady: () => onReady7,
+  showReport: () => showReport,
+  track: () => track2,
+  untrack: () => untrack
 });
 import { getDocument, VerbosityLevel } from "pdfjs-dist";
 var FIELDS = [
@@ -4713,6 +4717,106 @@ ${fileNames?.join("\n") ?? "(failed to load)"}`
         }
       ]
     });
+  }
+}
+var trackChannels2 = new CachedMap("./data/ucpd-track.json");
+var seen = new CachedMap("./data/ucpd-seen.json");
+var onReady7 = () => Promise.all([trackChannels2.read(), seen.read()]);
+var CHECK_FREQ2 = 2.13 * 60 * 60 * 1e3;
+function init2(client2) {
+  setInterval(async () => {
+    const channels = trackChannels2.entries();
+    if (channels.length === 0) {
+      return;
+    }
+    const unseen = (await getFileNames()).filter(
+      (fileName) => !seen.get(fileName)
+    );
+    if (unseen.length === 0) {
+      return;
+    }
+    const description = display(await getReports(unseen[0]));
+    const embeds = [
+      {
+        title: unseen[0],
+        url: BASE_URL + encodeURIComponent(unseen[0]),
+        description,
+        footer: {
+          text: `${description.length} chars \xB7 To turn off, reply "i renounce my life of crime"`
+        }
+      }
+    ];
+    if (unseen.length > 1) {
+      embeds.push({
+        title: "Multiple crime logs just dropped",
+        description: `Reply \`florida man:\` followed by the date:
+${unseen.join(
+          "\n"
+        )}`
+      });
+    }
+    for (const fileName of unseen) {
+      seen.set(fileName, 1);
+    }
+    await seen.save();
+    for (const [channelId] of channels) {
+      const channel = await client2.channels.fetch(channelId);
+      if (!channel?.isTextBased()) {
+        continue;
+      }
+      await channel.send({
+        content: select([
+          "who did this",
+          "exposed",
+          "did u do this",
+          "this reminds me of u",
+          "inspirational \u{1F60D}",
+          "live love LIE",
+          "i knew its not the trolley its YOU"
+        ]),
+        embeds
+      });
+    }
+  }, CHECK_FREQ2);
+}
+async function track2(message) {
+  if (trackChannels2.has(message.channel.id)) {
+    await message.reply(
+      select([
+        "oh i thought you all were already criminals",
+        "arent you already learning crime",
+        "yeah yeah ill tell you too"
+      ])
+    );
+  } else {
+    await trackChannels2.set(message.channel.id, 1).save();
+    await message.reply(
+      select([
+        "ok when crime happens i will tell you",
+        "ill check in on ucpd every once in a while and if they have new lessons available i shall send em here",
+        "when ucpd releases their crime logs ill put them here"
+      ])
+    );
+  }
+}
+async function untrack(message) {
+  if (trackChannels2.has(message.channel.id)) {
+    await trackChannels2.delete(message.channel.id).save();
+    await message.reply(
+      select([
+        "i guess you got tired of seeing those crime logs",
+        "okay fine, next think you know youll be saying how the trolley is making the campus unsafe or soemthing silly",
+        "ignorance is bliss"
+      ])
+    );
+  } else {
+    await message.reply(
+      select([
+        "cool but you didnt need to tell me that",
+        "cool story bro",
+        "ok lol"
+      ])
+    );
   }
 }
 
@@ -4985,6 +5089,10 @@ var commands = {
   "florida man:": ucpd_exports.showReport,
   "show latest ucpd report": ucpd_exports.showReport,
   "show ucpd reports for:": ucpd_exports.showReport,
+  "teach me crime": ucpd_exports.track,
+  "enable ucpd reports in this channel": ucpd_exports.track,
+  "i renounce my life of crime": ucpd_exports.untrack,
+  "disable ucpd reports in this channel": ucpd_exports.untrack,
   "this is a poll channel": poll_reactions_exports.pollChannel,
   "turn on poll channel mode which auto-adds reactions to messages": poll_reactions_exports.pollChannel,
   "poll channel": poll_reactions_exports.pollChannel,
@@ -5147,9 +5255,10 @@ fs2.ensureDir("./data/").then(
     vote_lockdown_exports.onReady(),
     mentions_exports.onReady(),
     emoji_usage_exports.onReady(),
-    minecraft_exports.onReady()
+    minecraft_exports.onReady(),
+    ucpd_exports.onReady()
   ])
-).then(() => client.login(process.env.TOKEN)).then(() => minecraft_exports.init(client)).catch((err) => {
+).then(() => client.login(process.env.TOKEN)).then(() => Promise.all([minecraft_exports.init(client), ucpd_exports.init(client)])).catch((err) => {
   console.error(err);
   process.exit(1);
 });
