@@ -4673,7 +4673,23 @@ function display(reports) {
 ` : "",
       `-# ${dateOccurred} ${timeOccurred} \xB7 ${location}`
     ].join("")
-  ).join("\n\n");
+  );
+}
+function group(strings, separator = "\n\n", maxLength = 4096) {
+  const groups = [];
+  for (const string of strings) {
+    if (groups.length === 0) {
+      groups.push(string);
+      continue;
+    }
+    const newGroup = groups[groups.length - 1] + separator + string;
+    if (newGroup.length > maxLength) {
+      groups.push(string);
+    } else {
+      groups[groups.length - 1] = newGroup;
+    }
+  }
+  return groups;
 }
 async function showReport(message, [fileName]) {
   if (!fileName) {
@@ -4682,21 +4698,18 @@ async function showReport(message, [fileName]) {
     fileName += ".pdf";
   }
   try {
-    const description = display(await getReports(fileName));
+    const descriptions = group(display(await getReports(fileName)));
     await message.reply({
       content: select([
         "oh look i did that",
         "my bad",
         "what did u do this time"
       ]),
-      embeds: [
-        {
-          title: fileName,
-          url: BASE_URL + encodeURIComponent(fileName),
-          description,
-          footer: { text: `${description.length} chars` }
-        }
-      ]
+      embeds: descriptions.map((description, i) => ({
+        title: descriptions.length === 1 ? fileName : `${fileName} (${i + 1}/${descriptions.length})`,
+        url: BASE_URL + encodeURIComponent(fileName) + (i === 0 ? "" : `#${i + 1}`),
+        description
+      }))
     });
   } catch (error) {
     const fileNames = await getFileNames().catch(() => null);
@@ -4730,22 +4743,23 @@ function init2(client2) {
       return;
     }
     const unseen = (await getFileNames()).filter(
-      (fileName) => !seen.get(fileName)
+      (fileName2) => !seen.get(fileName2)
     );
     if (unseen.length === 0) {
       return;
     }
-    const description = display(await getReports(unseen[0]));
-    const embeds = [
-      {
-        title: unseen[0],
-        url: BASE_URL + encodeURIComponent(unseen[0]),
+    const fileName = unseen[0];
+    const descriptions = group(display(await getReports(fileName)));
+    const embeds = descriptions.map(
+      (description, i) => ({
+        title: descriptions.length === 1 ? fileName : `${fileName} (${i + 1}/${descriptions.length})`,
+        url: BASE_URL + encodeURIComponent(fileName) + (i === 0 ? "" : `#${i + 1}`),
         description,
-        footer: {
-          text: `${description.length} chars \xB7 To turn off, reply "i renounce my life of crime"`
-        }
-      }
-    ];
+        footer: i === descriptions.length - 1 ? {
+          text: 'To turn off, reply "i renounce my life of crime"'
+        } : void 0
+      })
+    );
     if (unseen.length > 1) {
       embeds.push({
         title: "Multiple crime logs just dropped",
@@ -4755,8 +4769,8 @@ ${unseen.join(
         )}`
       });
     }
-    for (const fileName of unseen) {
-      seen.set(fileName, 1);
+    for (const fileName2 of unseen) {
+      seen.set(fileName2, 1);
     }
     await seen.save();
     for (const [channelId] of channels) {

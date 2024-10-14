@@ -135,17 +135,40 @@ async function getFileNames (): Promise<string[]> {
 }
 
 // https://github.com/SheepTester/ucsd-event-scraper/blob/main/explore/police/display.ts
-function display (reports: Report[]): string {
-  return reports
-    .map(
-      ({ type, location, dateOccurred, timeOccurred, summary, disposition }) =>
-        [
-          `**${type}**${summary ? ': ' : ''}${summary}\n`,
-          disposition ? `Result: ${disposition}\n` : '',
-          `-# ${dateOccurred} ${timeOccurred} · ${location}`
-        ].join('')
-    )
-    .join('\n\n')
+function display (reports: Report[]): string[] {
+  return reports.map(
+    ({ type, location, dateOccurred, timeOccurred, summary, disposition }) =>
+      [
+        `**${type}**${summary ? ': ' : ''}${summary}\n`,
+        disposition ? `Result: ${disposition}\n` : '',
+        `-# ${dateOccurred} ${timeOccurred} · ${location}`
+      ].join('')
+  )
+}
+
+/**
+ * Groups strings such that the resulting groups are at most `maxLength` characters
+ * long.
+ */
+function group (
+  strings: string[],
+  separator = '\n\n',
+  maxLength = 4096
+): string[] {
+  const groups: string[] = []
+  for (const string of strings) {
+    if (groups.length === 0) {
+      groups.push(string)
+      continue
+    }
+    const newGroup = groups[groups.length - 1] + separator + string
+    if (newGroup.length > maxLength) {
+      groups.push(string)
+    } else {
+      groups[groups.length - 1] = newGroup
+    }
+  }
+  return groups
 }
 
 export async function showReport (message: Message, [fileName]: string[]) {
@@ -155,21 +178,24 @@ export async function showReport (message: Message, [fileName]: string[]) {
     fileName += '.pdf'
   }
   try {
-    const description = display(await getReports(fileName))
+    const descriptions = group(display(await getReports(fileName)))
     await message.reply({
       content: select([
         'oh look i did that',
         'my bad',
         'what did u do this time'
       ]),
-      embeds: [
-        {
-          title: fileName,
-          url: BASE_URL + encodeURIComponent(fileName),
-          description,
-          footer: { text: `${description.length} chars` }
-        }
-      ]
+      embeds: descriptions.map((description, i) => ({
+        title:
+          descriptions.length === 1
+            ? fileName
+            : `${fileName} (${i + 1}/${descriptions.length})`,
+        url:
+          BASE_URL +
+          encodeURIComponent(fileName) +
+          (i === 0 ? '' : `#${i + 1}`),
+        description
+      }))
     })
   } catch (error) {
     const fileNames = await getFileNames().catch(() => null)
@@ -213,17 +239,27 @@ export function init (client: Client): void {
     if (unseen.length === 0) {
       return
     }
-    const description = display(await getReports(unseen[0]))
-    const embeds: APIEmbed[] = [
-      {
-        title: unseen[0],
-        url: BASE_URL + encodeURIComponent(unseen[0]),
+    const fileName = unseen[0]
+    const descriptions = group(display(await getReports(fileName)))
+    const embeds = descriptions.map(
+      (description, i): APIEmbed => ({
+        title:
+          descriptions.length === 1
+            ? fileName
+            : `${fileName} (${i + 1}/${descriptions.length})`,
+        url:
+          BASE_URL +
+          encodeURIComponent(fileName) +
+          (i === 0 ? '' : `#${i + 1}`),
         description,
-        footer: {
-          text: `${description.length} chars · To turn off, reply "i renounce my life of crime"`
-        }
-      }
-    ]
+        footer:
+          i === descriptions.length - 1
+            ? {
+                text: 'To turn off, reply "i renounce my life of crime"'
+              }
+            : undefined
+      })
+    )
     if (unseen.length > 1) {
       embeds.push({
         title: 'Multiple crime logs just dropped',
