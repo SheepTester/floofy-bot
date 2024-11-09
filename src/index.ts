@@ -266,7 +266,7 @@ client.on('messageCreate', message => {
 })
 
 client.on('messageUpdate', async (_oldMessage, newMessage) => {
-  if (cmd.ignore.ignoring !== null) {
+  if (cmd.ignore.ignoreState.endPhrase !== null) {
     return
   }
   if (newMessage) {
@@ -281,14 +281,14 @@ client.on('messageUpdate', async (_oldMessage, newMessage) => {
 })
 
 client.on('guildMemberAdd', async member => {
-  if (cmd.ignore.ignoring !== null) {
+  if (cmd.ignore.ignoreState.endPhrase !== null) {
     return
   }
   await cmd.welcome.onJoin(member)
 })
 
 client.on('messageReactionAdd', async (reaction, user) => {
-  if (cmd.ignore.ignoring !== null) {
+  if (cmd.ignore.ignoreState.endPhrase !== null) {
     return
   }
   cmd.emojiUsage.onReact(reaction)
@@ -298,7 +298,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
 // There is also RemoveAll and RemoveEmoji, but I think they should keep the
 // user's role and just clear reactions. Also easier for me 😊
 client.on('messageReactionRemove', async (reaction, user) => {
-  if (cmd.ignore.ignoring !== null) {
+  if (cmd.ignore.ignoreState.endPhrase !== null) {
     return
   }
   cmd.reactionRoles.onReact(reaction, user, false)
