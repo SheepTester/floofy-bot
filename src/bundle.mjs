@@ -4699,18 +4699,27 @@ async function showReport(message, [fileName]) {
   }
   try {
     const descriptions = group(display(await getReports(fileName)));
-    await message.reply({
-      content: select([
-        "oh look i did that",
-        "my bad",
-        "what did u do this time"
-      ]),
-      embeds: descriptions.map((description, i) => ({
-        title: descriptions.length === 1 ? fileName : `${fileName} (${i + 1}/${descriptions.length})`,
-        url: BASE_URL + encodeURIComponent(fileName) + (i === 0 ? "" : `#${i + 1}`),
-        description
-      }))
-    });
+    for (const [i, description] of descriptions.entries()) {
+      const msg = {
+        content: i === 0 ? select([
+          "oh look i did that",
+          "my bad",
+          "what did u do this time"
+        ]) : "",
+        embeds: [
+          {
+            title: descriptions.length === 1 ? fileName : `${fileName} (${i + 1}/${descriptions.length})`,
+            url: BASE_URL + encodeURIComponent(fileName),
+            description
+          }
+        ]
+      };
+      if (i === 0) {
+        await message.reply(msg);
+      } else {
+        await message.channel.send(msg);
+      }
+    }
   } catch (error) {
     const fileNames = await getFileNames().catch(() => null);
     await message.reply({
@@ -4760,15 +4769,6 @@ function init2(client2) {
         } : void 0
       })
     );
-    if (unseen.length > 1) {
-      embeds.push({
-        title: "Multiple crime logs just dropped",
-        description: `Reply \`florida man:\` followed by the date:
-${unseen.join(
-          "\n"
-        )}`
-      });
-    }
     for (const fileName2 of unseen) {
       seen.set(fileName2, 1);
     }
@@ -4778,18 +4778,28 @@ ${unseen.join(
       if (!channel?.isTextBased()) {
         continue;
       }
-      await channel.send({
-        content: select([
-          "who did this",
-          "exposed",
-          "did u do this",
-          "this reminds me of u",
-          "inspirational \u{1F60D}",
-          "live love LIE",
-          "i knew its not the trolley its YOU"
-        ]),
-        embeds
-      });
+      for (const [i, embed] of embeds.entries()) {
+        const embeds2 = [embed];
+        if (unseen.length > 1 && i === descriptions.length - 1) {
+          embeds2.push({
+            title: "Multiple crime logs just dropped",
+            description: `Reply \`florida man:\` followed by the date:
+${unseen.join("\n")}`
+          });
+        }
+        await channel.send({
+          content: i === 0 ? select([
+            "who did this",
+            "exposed",
+            "did u do this",
+            "this reminds me of u",
+            "inspirational \u{1F60D}",
+            "live love LIE",
+            "i knew its not the trolley its YOU"
+          ]) : "",
+          embeds: embeds2
+        });
+      }
     }
   }, CHECK_FREQ2);
 }
@@ -4885,9 +4895,11 @@ async function about(message) {
 var ignore_us_exports = {};
 __export(ignore_us_exports, {
   ignore: () => ignore,
-  ignoring: () => ignoring
+  ignoreState: () => ignoreState
 });
-var ignoring = null;
+var ignoreState = {
+  endPhrase: null
+};
 async function ignore(message) {
   if (message.author.id === process.env.OWNER) {
     const keyword = select([
@@ -4896,7 +4908,7 @@ async function ignore(message) {
       "moofy, resuscitate.",
       "moofy, come back please"
     ]);
-    ignoring = keyword;
+    ignoreState.endPhrase = keyword;
     await message.reply(
       select([
         `say \`${keyword}\` and i shall return. bye`,
@@ -5145,9 +5157,9 @@ var client = new Client2({
   ]
 });
 async function handleMessage(message) {
-  if (ignore_us_exports.ignoring !== null) {
-    if (message.author.id === process.env.OWNER && message.content === ignore_us_exports.ignoring) {
-      ignore_us_exports.ignoring = null;
+  if (ignore_us_exports.ignoreState.endPhrase !== null) {
+    if (message.author.id === process.env.OWNER && message.content === ignore_us_exports.ignoreState.endPhrase) {
+      ignore_us_exports.ignoreState.endPhrase = null;
       await message.channel.send(
         select([
           "i'm BACK folkk",
@@ -5223,7 +5235,7 @@ client.on("messageCreate", (message) => {
   handleMessage(message);
 });
 client.on("messageUpdate", async (_oldMessage, newMessage) => {
-  if (ignore_us_exports.ignoring !== null) {
+  if (ignore_us_exports.ignoreState.endPhrase !== null) {
     return;
   }
   if (newMessage) {
@@ -5236,20 +5248,20 @@ client.on("messageUpdate", async (_oldMessage, newMessage) => {
   }
 });
 client.on("guildMemberAdd", async (member) => {
-  if (ignore_us_exports.ignoring !== null) {
+  if (ignore_us_exports.ignoreState.endPhrase !== null) {
     return;
   }
   await welcome_exports.onJoin(member);
 });
 client.on("messageReactionAdd", async (reaction, user) => {
-  if (ignore_us_exports.ignoring !== null) {
+  if (ignore_us_exports.ignoreState.endPhrase !== null) {
     return;
   }
   emoji_usage_exports.onReact(reaction);
   reaction_roles_exports.onReact(reaction, user, true);
 });
 client.on("messageReactionRemove", async (reaction, user) => {
-  if (ignore_us_exports.ignoring !== null) {
+  if (ignore_us_exports.ignoreState.endPhrase !== null) {
     return;
   }
   reaction_roles_exports.onReact(reaction, user, false);

@@ -1,6 +1,6 @@
 // From https://github.com/SheepTester/ucsd-event-scraper/blob/main/explore/police/parse.ts
 
-import { APIEmbed, Client, Message } from 'discord.js'
+import { APIEmbed, BaseMessageOptions, Client, Message } from 'discord.js'
 import { getDocument, VerbosityLevel } from 'pdfjs-dist'
 import select from '../utils/select'
 import CachedMap from '../utils/CachedMap'
@@ -179,24 +179,34 @@ export async function showReport (message: Message, [fileName]: string[]) {
   }
   try {
     const descriptions = group(display(await getReports(fileName)))
-    await message.reply({
-      content: select([
-        'oh look i did that',
-        'my bad',
-        'what did u do this time'
-      ]),
-      embeds: descriptions.map((description, i) => ({
-        title:
-          descriptions.length === 1
-            ? fileName
-            : `${fileName} (${i + 1}/${descriptions.length})`,
-        url:
-          BASE_URL +
-          encodeURIComponent(fileName) +
-          (i === 0 ? '' : `#${i + 1}`),
-        description
-      }))
-    })
+    for (const [i, description] of descriptions.entries()) {
+      const msg: BaseMessageOptions = {
+        content:
+          i === 0
+            ? select([
+              'oh look i did that',
+              'my bad',
+              'what did u do this time'
+            ])
+            : '',
+        embeds: [
+          {
+            title:
+              descriptions.length === 1
+                ? fileName
+                : `${fileName} (${i + 1}/${descriptions.length})`,
+            url: BASE_URL + encodeURIComponent(fileName),
+            description
+          }
+        ]
+      }
+      if (i === 0) {
+        await message.reply(msg)
+      } else {
+        await message.channel.send(msg)
+      }
+    }
+    
   } catch (error) {
     const fileNames = await getFileNames().catch(() => null)
     await message.reply({
@@ -260,14 +270,6 @@ export function init (client: Client): void {
             : undefined
       })
     )
-    if (unseen.length > 1) {
-      embeds.push({
-        title: 'Multiple crime logs just dropped',
-        description: `Reply \`florida man:\` followed by the date:\n${unseen.join(
-          '\n'
-        )}`
-      })
-    }
     for (const fileName of unseen) {
       seen.set(fileName, 1)
     }
@@ -277,18 +279,32 @@ export function init (client: Client): void {
       if (!channel?.isTextBased()) {
         continue
       }
-      await channel.send({
-        content: select([
-          'who did this',
-          'exposed',
-          'did u do this',
-          'this reminds me of u',
-          'inspirational 😍',
-          'live love LIE',
-          'i knew its not the trolley its YOU'
-        ]),
-        embeds
-      })
+      for (const [i, embed] of embeds.entries()) {
+        const embeds = [embed]
+        if (unseen.length > 1 && i === descriptions.length - 1) {
+          embeds.push({
+            title: 'Multiple crime logs just dropped',
+            description: `Reply \`florida man:\` followed by the date:\n${
+              unseen.join('\n')
+            }`
+          })
+        }
+        await channel.send({
+          content:
+            i === 0
+              ? select([
+                'who did this',
+                'exposed',
+                'did u do this',
+                'this reminds me of u',
+                'inspirational 😍',
+                'live love LIE',
+                'i knew its not the trolley its YOU'
+              ])
+              : '',
+          embeds
+        })
+      }
     }
   }, CHECK_FREQ)
 }
