@@ -178,12 +178,12 @@ const client = new Client({
 })
 
 async function handleMessage (message: Message): Promise<void> {
-  if (cmd.ignore.ignoring !== null) {
+  if (cmd.ignore.ignoreState.endPhrase !== null) {
     if (
       message.author.id === process.env.OWNER &&
-      message.content === cmd.ignore.ignoring
+      message.content === cmd.ignore.ignoreState.endPhrase
     ) {
-      cmd.ignore.ignoring = null
+      cmd.ignore.ignoreState.endPhrase = null
       await message.channel.send(
         select([
           "i'm BACK folkk",

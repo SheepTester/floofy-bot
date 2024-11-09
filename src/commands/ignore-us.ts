@@ -1,7 +1,13 @@
 import { Message } from 'discord.js'
 import select from '../utils/select'
 
-export let ignoring: string | null = null
+export type IgnoreState = {
+  endPhrase: string | null
+}
+
+export const ignoreState: IgnoreState = {
+  endPhrase: null
+}
 
 export async function ignore (message: Message): Promise<void> {
   if (message.author.id === process.env.OWNER) {
@@ -11,7 +17,7 @@ export async function ignore (message: Message): Promise<void> {
       'moofy, resuscitate.',
       'moofy, come back please'
     ])
-    ignoring = keyword
+    ignoreState.endPhrase = keyword
     await message.reply(
       select([
         `say \`${keyword}\` and i shall return. bye`,
