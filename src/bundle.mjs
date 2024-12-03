@@ -4754,10 +4754,10 @@ function init2(client2) {
     const unseen = (await getFileNames()).filter(
       (fileName2) => !seen.get(fileName2)
     );
-    if (unseen.length === 0) {
+    const fileName = unseen.at(-1);
+    if (!fileName) {
       return;
     }
-    const fileName = unseen[0];
     const descriptions = group(display(await getReports(fileName)));
     const embeds = descriptions.map(
       (description, i) => ({
@@ -4769,9 +4769,7 @@ function init2(client2) {
         } : void 0
       })
     );
-    for (const fileName2 of unseen) {
-      seen.set(fileName2, 1);
-    }
+    seen.set(fileName, 1);
     await seen.save();
     for (const [channelId] of channels) {
       const channel = await client2.channels.fetch(channelId);
@@ -4784,7 +4782,9 @@ function init2(client2) {
           embeds2.push({
             title: "Multiple crime logs just dropped",
             description: `Reply \`florida man:\` followed by the date:
-${unseen.join("\n")}`
+${unseen.join(
+              "\n"
+            )}`
           });
         }
         await channel.send({

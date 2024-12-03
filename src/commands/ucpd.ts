@@ -206,7 +206,6 @@ export async function showReport (message: Message, [fileName]: string[]) {
         await message.channel.send(msg)
       }
     }
-    
   } catch (error) {
     const fileNames = await getFileNames().catch(() => null)
     await message.reply({
@@ -246,10 +245,11 @@ export function init (client: Client): void {
     const unseen = (await getFileNames()).filter(
       fileName => !seen.get(fileName)
     )
-    if (unseen.length === 0) {
+    // Show oldest report first; display other reports if any later on
+    const fileName = unseen.at(-1)
+    if (!fileName) {
       return
     }
-    const fileName = unseen[0]
     const descriptions = group(display(await getReports(fileName)))
     const embeds = descriptions.map(
       (description, i): APIEmbed => ({
@@ -265,14 +265,12 @@ export function init (client: Client): void {
         footer:
           i === descriptions.length - 1
             ? {
-                text: 'To turn off, reply "i renounce my life of crime"'
-              }
+              text: 'To turn off, reply "i renounce my life of crime"'
+            }
             : undefined
       })
     )
-    for (const fileName of unseen) {
-      seen.set(fileName, 1)
-    }
+    seen.set(fileName, 1)
     await seen.save()
     for (const [channelId] of channels) {
       const channel = await client.channels.fetch(channelId)
@@ -284,9 +282,9 @@ export function init (client: Client): void {
         if (unseen.length > 1 && i === descriptions.length - 1) {
           embeds.push({
             title: 'Multiple crime logs just dropped',
-            description: `Reply \`florida man:\` followed by the date:\n${
-              unseen.join('\n')
-            }`
+            description: `Reply \`florida man:\` followed by the date:\n${unseen.join(
+              '\n'
+            )}`
           })
         }
         await channel.send({
