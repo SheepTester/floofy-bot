@@ -4880,7 +4880,7 @@ async function about(message) {
             "fun fact: you made javascript, that's why it sucks",
             "cool tip: make your js arrays sparce with `arr[5000] = 'lol'` then delete it using `delete arr[5000]` to spice up performance",
             "useful tip: make sure your code does not have `'use script'` because it makes it more prone to errors",
-            "did you know: javascript is used to mod [minecraft](https://minecraft.fandom.com/wiki/Bedrock_Edition_beta_scripting_documentation#Scripting_system)"
+            "did you know: javascript is used to mod [minecraft](https://web.archive.org/web/20201111231249/https://minecraft.gamepedia.com/Bedrock_Edition_beta_scripting_documentation#Scripting_System)"
           ])
         ].join("\n\n"),
         footer: {
