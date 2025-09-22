@@ -53,6 +53,8 @@ export async function exit (message: Message): Promise<void> {
     await reportExec('git pull')
     await reportExec('npm install')
     await reportExec('npx playwright install firefox')
+    results.push('Exiting...')
+    await msg.edit(displayResults(results))
     process.exit()
   } else {
     await message.reply(
