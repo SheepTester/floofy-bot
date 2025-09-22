@@ -1,19 +1,21 @@
 import type { Part } from '@google/genai'
 import { GoogleGenAI } from '@google/genai'
-import fs from 'fs/promises'
 import { Collection, MongoClient } from 'mongodb'
-import path from 'path'
 import type { Response } from 'playwright'
 import playwright from 'playwright'
 import sharp from 'sharp'
 import { displayError } from './display-error'
 
-const client = new MongoClient(
-  `mongodb+srv://${process.env.FREE_FOOD_MONGO_USERPASS}@bruh.duskolx.mongodb.net/?retryWrites=true&w=majority&appName=Bruh`
-)
-await client.connect()
-const db = client.db('events_db')
-const collection: Collection<ScrapedEvent> = db.collection('events_collection')
+let collectionPromise: Promise<Collection<ScrapedEvent>> | undefined
+
+async function getCollection (): Promise<Collection<ScrapedEvent>> {
+  const client = new MongoClient(
+    `mongodb+srv://${process.env.FREE_FOOD_MONGO_USERPASS}@bruh.duskolx.mongodb.net/?retryWrites=true&w=majority&appName=Bruh`
+  )
+  await client.connect()
+  const db = client.db('events_db')
+  return db.collection('events_collection')
+}
 
 type ImageV2Candidate = {
   width: number
@@ -234,16 +236,17 @@ const schemaPrompt = `output only a JSON array of event objects without any expl
 const fmt = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/Los_Angeles',
   dateStyle: 'long'
-  // gemini will use the current time for the event :/
-  // timeStyle: "short", // or medium since the timestamps have second precision
+  // omit time or gemini will use the current time for the event :/
 })
 
+let ai: GoogleGenAI | undefined
 let geminiCalls = 0
 let starting = 0
 let geminiReady = Promise.resolve()
 
 export class FreeFoodScraper {
-  #ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  #allUserStories: UserStories[] = []
+  #allTimelinePosts: TimelinePost[] = []
 
   #logs = ''
 
@@ -252,22 +255,21 @@ export class FreeFoodScraper {
       this.#logs += '\n'
     }
     this.#logs += message
+    console.error(message)
   }
 
   async #fetchImage (url: string, retries = 0): Promise<ArrayBuffer> {
     try {
       const response = await fetch(url).catch(error => {
-        this.#log(error)
+        this.#log(`[image] ${displayError(error)}`)
         return Promise.reject(new Error(`Fetch error: ${url}`))
       })
       return response.arrayBuffer()
-      // const buffer = Buffer.from(arrayBuffer);
-      // return buffer.toString("base64");
     } catch (error) {
       if (retries < 3) {
-        this.#log(displayError(error))
+        this.#log(`[image] ${displayError(error)}`)
         this.#log(
-          `fetching image failed. will try again in 5 secs. retries = ${retries}`
+          `[image] fetch failed. will try again in 5 secs. retries = ${retries}`
         )
         await new Promise(resolve => setTimeout(resolve, 5 * 1000))
         return this.#fetchImage(url, retries + 1)
@@ -293,7 +295,9 @@ export class FreeFoodScraper {
       // max 15 RPM on free plan. 5 seconds just in case
       const ready = starting + (60 + 5) * 1000
       const delay = ready - Date.now()
-      this.#log(`taking a ${delay / 1000} sec break to cool off on gemini`)
+      this.#log(
+        `[gemini] taking a ${delay / 1000} sec break to cool off on gemini`
+      )
       await new Promise(resolve => setTimeout(resolve, delay))
       geminiCalls = 0
     }
@@ -301,23 +305,19 @@ export class FreeFoodScraper {
       starting = Date.now()
     }
     geminiCalls++
+    ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
     try {
       // TODO: turn down the temperature maybe
-      const result = await this.#ai.models.generateContent({
+      const result = await ai.models.generateContent({
         model: 'gemini-2.0-flash',
         contents: [
           ...images.map(
-            (buffer): Part =>
-              // fetchImageAsBase64(url).then(
-              // (dataUrl): Part => ({
-              ({
-                inlineData: {
-                  data: Buffer.from(buffer).toString('base64'),
-                  mimeType: 'image/jpeg'
-                }
-              })
-            // })
-            // )
+            (buffer): Part => ({
+              inlineData: {
+                data: Buffer.from(buffer).toString('base64'),
+                mimeType: 'image/jpeg'
+              }
+            })
           ),
           {
             text:
@@ -349,7 +349,7 @@ export class FreeFoodScraper {
           error.message.includes('500 Internal Server Error.') ||
           error.message.includes('429 Too Many Requests.'))
       ) {
-        this.#log(`[gemini error] ${displayError(error)}`)
+        this.#log(`[gemini] ${displayError(error)}`)
         let timeout = 60 * (retries + 1) + 5
         if (error.message.includes('429 Too Many Requests.')) {
           const match = error.message.match(/"retryDelay":"(\d+)s"/)
@@ -358,7 +358,7 @@ export class FreeFoodScraper {
           }
         }
         this.#log(
-          `cooling off for ${timeout} secs then retrying. retries = ${retries}`
+          `[gemini] cooling off for ${timeout} secs then retrying. retries = ${retries}`
         )
         await new Promise(resolve => setTimeout(resolve, timeout * 1000))
         resolve()
@@ -370,10 +370,6 @@ export class FreeFoodScraper {
       resolve()
     }
   }
-
-  #allUserStories: UserStories[] = []
-  #allTimelinePosts: TimelinePost[] = []
-  #id = 0
 
   async #handleGraphQlResponse (response: GraphQlResponse): Promise<void> {
     const {
@@ -424,28 +420,15 @@ export class FreeFoodScraper {
       this.#allTimelinePosts.push(...timelinePosts)
       return
     }
-    this.#log('| this one has no stories')
+    this.#log('[graphql] this one has no stories')
   }
 
   async #handleResponse (response: Response): Promise<void> {
-    // thanks chatgpt
     const url = response.url()
     if (new URL(url).pathname === '/graphql/query') {
       const buffer = await response.body()
-      const filePath = path.join(
-        'scraped',
-        `d${this.#id.toString().padStart(3, '0')}.json`
-      )
-      this.#log(`${filePath} ${url}`)
-      this.#id++
-      await fs.writeFile(filePath, buffer)
       await this.#handleGraphQlResponse(JSON.parse(buffer.toString('utf-8')))
     }
-    // if (buffer.slice(0, prefix.length).equals(prefix)) {
-    //   await fs.writeFile(filePath + ".json", buffer.slice(prefix.length));
-    // } else {
-    //   await fs.writeFile(filePath, buffer);
-    // }
   }
 
   async #insertIfNew (
@@ -454,10 +437,13 @@ export class FreeFoodScraper {
     imageUrls: string[],
     timestamp: Date,
     caption?: string
-  ): Promise<GeminiResult[] | null> {
+  ): Promise<void> {
+    collectionPromise ??= getCollection()
+    const collection = await collectionPromise
     const existingDoc = await collection.findOne({ sourceId })
     if (existingDoc) {
-      return null
+      this.#log(`[insert] ${sourceId} already added`)
+      return
     }
     const images = await Promise.all(
       imageUrls.map(url => this.#fetchImage(url))
@@ -468,7 +454,9 @@ export class FreeFoodScraper {
     if (events.length > 0) {
       for (const event of events) {
         if (event.date.year !== new Date().getFullYear()) {
-          this.#log(`${JSON.stringify(event, null, '\t')} is in a weird year`)
+          this.#log(
+            `[insert] ${JSON.stringify(event, null, '\t')} is in a weird year`
+          )
         }
       }
       // it kinda looks like they're all 4:5 now :/
@@ -498,73 +486,72 @@ export class FreeFoodScraper {
         result: false
       })
     }
-    return events
+    this.#log(
+      `[insert] ${sourceId} added ${JSON.stringify(events, null, '\t')}`
+    )
   }
 
   async main () {
-    // https://oxylabs.io/blog/playwright-web-scraping
-    // Firefox: https://www.reddit.com/r/webscraping/comments/149czf4/how_i_can_bypass_antibot_in_playwright_or_seleium/jo5xhw2/
-    const browser = await playwright.firefox.launch({
-      // see the browser
-      // headless: false,
-    })
-    // const storageStateExists = await fs
-    //   .stat("auth.json")
-    //   .then(() => true)
-    //   .catch(() => false);
-    const context = await browser.newContext({
-      // storageState: storageStateExists ? "auth.json" : undefined,
-    })
-    // if (!storageStateExists) {
+    const browser = await playwright.firefox.launch()
+    const context = await browser.newContext()
     await context.addCookies(
-      JSON.parse(await fs.readFile('cookies.json', 'utf-8'))
+      Object.entries({
+        ig_nrcb: '1',
+        ps_l: '1',
+        ps_n: '1',
+        wd: '1440x825',
+        ...JSON.parse(process.env.FREE_FOOD_COOKIES ?? '{}')
+      }).map(([name, value]) => ({
+        name,
+        value: String(value),
+        path: '/',
+        domain: '.instagram.com'
+      }))
     )
-    // }
     const page = await context.newPage()
 
     const promises: Promise<void>[] = []
-    page.on('response', response => {
-      promises.push(this.#handleResponse(response))
-    })
-    await page.goto('https://instagram.com/')
-    function * analyze (x: any): Generator<GraphQlResponse> {
-      for (const req of x.require ?? []) {
-        const args = req.at(-1)
-        for (const arg of args) {
-          if (arg?.__bbox) {
-            if (arg.__bbox.complete) yield arg.__bbox.result
-            else yield * analyze(arg.__bbox)
+    try {
+      page.on('response', response => {
+        promises.push(this.#handleResponse(response))
+      })
+      await page.goto('https://instagram.com/')
+      function * analyze (x: any): Generator<GraphQlResponse> {
+        for (const req of x.require ?? []) {
+          const args = req.at(-1)
+          for (const arg of args) {
+            if (arg?.__bbox) {
+              if (arg.__bbox.complete) yield arg.__bbox.result
+              else yield * analyze(arg.__bbox)
+            }
           }
         }
       }
-    }
-    for (const script of await page
-      .locator('css=script[type="application/json"]')
-      .all()) {
-      const json = await script
-        .textContent()
-        .then(json => json && JSON.parse(json))
-        .catch(() => {})
-      const results = Array.from(analyze(json))
-      for (const result of results) {
-        await this.#handleGraphQlResponse(result)
+      for (const script of await page
+        .locator('css=script[type="application/json"]')
+        .all()) {
+        const json = await script
+          .textContent()
+          .then(json => json && JSON.parse(json))
+          .catch(() => {})
+        const results = Array.from(analyze(json))
+        for (const result of results) {
+          await this.#handleGraphQlResponse(result)
+        }
       }
-    }
-    this.#log('i am instagramming now')
-    for (let i = 0; i < 10; i++) {
-      await page.keyboard.press('End') // scroll to bottom
-      await page
-        .waitForRequest(
-          request => new URL(request.url()).pathname === '/graphql/query',
-          { timeout: 1000 }
-        )
-        .catch(() => this.#log('no graphql query from pressing end key'))
-      await page.waitForTimeout(500) // give time for page to update so i can press end key again
-      this.#log(`end key ${i + 1}`)
-    }
-    await page.keyboard.press('Home')
-    let storiesFromEnd = true
-    if (storiesFromEnd) {
+      this.#log('[browser] Scrolling down posts...')
+      for (let i = 0; i < 10; i++) {
+        await page.keyboard.press('End') // scroll to bottom
+        await page
+          .waitForRequest(
+            request => new URL(request.url()).pathname === '/graphql/query',
+            { timeout: 1000 }
+          )
+          .catch(() => this.#log('no graphql query from pressing end key'))
+        await page.waitForTimeout(500) // give time for page to update so i can press end key again
+        this.#log(`[browser] end key ${i + 1}`)
+      }
+      await page.keyboard.press('Home')
       // scroll to end has several benefits:
       // - no ads
       // - will include already-read storeies
@@ -576,21 +563,14 @@ export class FreeFoodScraper {
       await storyScroller.hover()
       for (let i = 0; i < 10; i++) await page.mouse.wheel(1000, 0)
       await page.locator('css=[aria-label^="Story by"]').last().click()
-    } else {
-      const story = await page.waitForSelector('[aria-label^="Story by"]')
-      this.#log('i see the stories are ready for me to CLICK')
-      await story.click()
-    }
-    this.#log('story hath been click')
-    await page.waitForRequest(
-      request => new URL(request.url()).pathname === '/graphql/query'
-    )
-    this.#log('a request was made')
-    await page.waitForTimeout(1000)
-    const storyIterations = storiesFromEnd ? Infinity : 10
-    for (let i = 0; i < storyIterations; i++) {
-      let story = page.locator('css=a[href^="/stories/"]')
-      if (storiesFromEnd) {
+      this.#log('[browser] Reading stories from end...')
+      await page.waitForRequest(
+        request => new URL(request.url()).pathname === '/graphql/query'
+      )
+      this.#log('[browser] It seems the stories have opened.')
+      await page.waitForTimeout(1000)
+      for (let i = 0; ; i++) {
+        let story = page.locator('css=a[href^="/stories/"]')
         // click first visible story
         story = story.first()
         const atEnd = await story.evaluate(link => {
@@ -603,31 +583,34 @@ export class FreeFoodScraper {
           )
         })
         if (atEnd) {
-          this.#log("We're done with stories! yay")
-          this.#log('screenshot time!')
-          await page.screenshot({ path: 'bruh.png', fullPage: true })
+          this.#log("[browser] We're done with stories! yay")
           break
         }
-      } else {
-        // click last visible story
-        story = story.last()
+        await story.click()
+        await page
+          .waitForRequest(
+            request => new URL(request.url()).pathname === '/graphql/query',
+            { timeout: 1000 }
+          )
+          .catch(() =>
+            this.#log(
+              '[browser] no graphql query from paging down story, oh well'
+            )
+          )
+        await page.waitForTimeout(500) // give time for page to update so i can press end key again
+        this.#log(`[browser] story pagination ${i + 1}`)
       }
-      await story.click()
-      await page
-        .waitForRequest(
-          request => new URL(request.url()).pathname === '/graphql/query',
-          { timeout: 1000 }
-        )
-        .catch(() =>
-          this.#log('no graphql query from paging down story, oh well')
-        )
-      await page.waitForTimeout(500) // give time for page to update so i can press end key again
-      this.#log(`story pagination ${i + 1}`)
+      // TODO
+      await page.context().storageState({ path: 'auth.json' })
+    } catch (error) {
+      // TODO
+      await page.screenshot({ path: 'bruh.png', fullPage: true })
+      throw error
+    } finally {
+      await context.close()
+      await browser.close()
+      this.#log('[browser] i close the browser')
     }
-    await page.context().storageState({ path: 'auth.json' })
-    await context.close()
-    await browser.close()
-    this.#log('i close the browser')
 
     await Promise.all(promises)
 
@@ -637,27 +620,14 @@ export class FreeFoodScraper {
         const url = postId
           ? `https://www.instagram.com/p/${postId}/`
           : `https://www.instagram.com/stories/${username}/${storyId}/`
-        const added = await this.#insertIfNew(
-          sourceId,
-          url,
-          [imageUrl],
-          timestamp
-        )
-        this.#log(`${sourceId} ${JSON.stringify(added, null, '\t')}`)
+        await this.#insertIfNew(sourceId, url, [imageUrl], timestamp)
       }
     }
     for (const { username, postId, caption, imageUrls, timestamp } of this
       .#allTimelinePosts) {
       const sourceId = `post/${username}/${postId}`
       const url = `https://www.instagram.com/p/${postId}/`
-      const added = await this.#insertIfNew(
-        sourceId,
-        url,
-        imageUrls,
-        timestamp,
-        caption
-      )
-      this.#log(`${sourceId} ${JSON.stringify(added, null, '\t')}`)
+      await this.#insertIfNew(sourceId, url, imageUrls, timestamp, caption)
     }
 
     this.#log('ok gamers we done')
