@@ -47,10 +47,10 @@ async function help (message: Message): Promise<void> {
           value: aliases.length
             ? `or ${aliases.map(alias => `\`${alias}\``).join(' or ')}`
             : select([
-                'no aliases, nice',
-                "that's it",
-                'this command has no aliases'
-              ]),
+              'no aliases, nice',
+              "that's it",
+              'this command has no aliases'
+            ]),
           inline: true
         }))
       }
@@ -59,7 +59,8 @@ async function help (message: Message): Promise<void> {
 }
 const ownerCommands: Record<string, Command> = {
   'ignore us please': cmd.ignore.ignore,
-  exeunt: cmd.internals.exit
+  exeunt: cmd.internals.exit,
+  'debug scraper': cmd.internals.debugScraper
 }
 const commands: Record<string, Command> = {
   'source of <id>': cmd.source.getSource,

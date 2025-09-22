@@ -1,6 +1,8 @@
 import { exec } from 'child_process'
 import { Message } from 'discord.js'
 import select from '../utils/select'
+import { FreeFoodScraper } from '../utils/free-food'
+import { displayError } from '../utils/display-error'
 
 type ExecutionResult = {
   // I don't know where `ExecException` comes from
@@ -60,5 +62,33 @@ export async function exit (message: Message): Promise<void> {
         'scram plebian'
       ])
     )
+  }
+}
+
+export async function debugScraper (message: Message): Promise<void> {
+  if (message.author.id !== process.env.OWNER) {
+    await message.reply('fuck off')
+    return
+  }
+
+  await message.react('👀')
+  const scraper = new FreeFoodScraper()
+  try {
+    const added = await scraper.main()
+    await message.reply({
+      embeds: [{ description: `${added} events added.` }]
+    })
+  } catch (error) {
+    await message.reply({
+      embeds: [{ description: `\`\`\`\n${scraper.logs.slice(-2000)}\n\`\`\`` }]
+    })
+    await message.reply({
+      embeds: [
+        {
+          description: `\`\`\`\n${displayError(error)}\n\`\`\``,
+          color: 0xff0000
+        }
+      ]
+    })
   }
 }

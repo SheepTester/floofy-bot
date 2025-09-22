@@ -248,13 +248,13 @@ export class FreeFoodScraper {
   #allUserStories: UserStories[] = []
   #allTimelinePosts: TimelinePost[] = []
 
-  #logs = ''
+  logs = ''
 
   #log (message: string): void {
-    if (this.#logs) {
-      this.#logs += '\n'
+    if (this.logs) {
+      this.logs += '\n'
     }
-    this.#logs += message
+    this.logs += message
     console.error(message)
   }
 
@@ -393,6 +393,7 @@ export class FreeFoodScraper {
         })
       )
       this.#allUserStories.push(...userStories)
+      this.#log(`[graph ql] found ${userStories.length} stories`)
       return
     }
     if (timelineData) {
@@ -418,9 +419,10 @@ export class FreeFoodScraper {
         }
       )
       this.#allTimelinePosts.push(...timelinePosts)
+      this.#log(`[graph ql] found ${timelinePosts.length} posts`)
       return
     }
-    this.#log('[graphql] this one has no stories')
+    this.#log('[graph ql] this one has no stories')
   }
 
   async #handleResponse (response: Response): Promise<void> {
@@ -437,13 +439,13 @@ export class FreeFoodScraper {
     imageUrls: string[],
     timestamp: Date,
     caption?: string
-  ): Promise<void> {
+  ): Promise<number> {
     collectionPromise ??= getCollection()
     const collection = await collectionPromise
     const existingDoc = await collection.findOne({ sourceId })
     if (existingDoc) {
       this.#log(`[insert] ${sourceId} already added`)
-      return
+      return 0
     }
     const images = await Promise.all(
       imageUrls.map(url => this.#fetchImage(url))
@@ -454,9 +456,7 @@ export class FreeFoodScraper {
     if (events.length > 0) {
       for (const event of events) {
         if (event.date.year !== new Date().getFullYear()) {
-          this.#log(
-            `[insert] ${JSON.stringify(event, null, '\t')} is in a weird year`
-          )
+          this.#log(`[insert] ${JSON.stringify(event)} is in a weird year`)
         }
       }
       // it kinda looks like they're all 4:5 now :/
@@ -486,12 +486,11 @@ export class FreeFoodScraper {
         result: false
       })
     }
-    this.#log(
-      `[insert] ${sourceId} added ${JSON.stringify(events, null, '\t')}`
-    )
+    this.#log(`[insert] ${sourceId} added ${JSON.stringify(events)}`)
+    return events.length
   }
 
-  async main () {
+  async main (): Promise<number> {
     const browser = await playwright.firefox.launch()
     const context = await browser.newContext()
     await context.addCookies(
@@ -527,6 +526,7 @@ export class FreeFoodScraper {
           }
         }
       }
+      let hasThereBeenAGraphQlResponse = false
       for (const script of await page
         .locator('css=script[type="application/json"]')
         .all()) {
@@ -537,7 +537,13 @@ export class FreeFoodScraper {
         const results = Array.from(analyze(json))
         for (const result of results) {
           await this.#handleGraphQlResponse(result)
+          hasThereBeenAGraphQlResponse = true
         }
+      }
+      if (!hasThereBeenAGraphQlResponse) {
+        throw new Error(
+          '[browser] No graphql responses received. Something is awry.'
+        )
       }
       this.#log('[browser] Scrolling down posts...')
       for (let i = 0; i < 10; i++) {
@@ -547,7 +553,9 @@ export class FreeFoodScraper {
             request => new URL(request.url()).pathname === '/graphql/query',
             { timeout: 1000 }
           )
-          .catch(() => this.#log('no graphql query from pressing end key'))
+          .catch(() =>
+            this.#log('[browser] no graphql query from pressing end key')
+          )
         await page.waitForTimeout(500) // give time for page to update so i can press end key again
         this.#log(`[browser] end key ${i + 1}`)
       }
@@ -600,11 +608,14 @@ export class FreeFoodScraper {
         await page.waitForTimeout(500) // give time for page to update so i can press end key again
         this.#log(`[browser] story pagination ${i + 1}`)
       }
-      // TODO
-      await page.context().storageState({ path: 'auth.json' })
+      await page
+        .context()
+        .storageState({ path: 'data/free-food-debug-auth.json' })
     } catch (error) {
-      // TODO
-      await page.screenshot({ path: 'bruh.png', fullPage: true })
+      await page.screenshot({
+        path: 'data/free-food-debug-screenshot.png',
+        fullPage: true
+      })
       throw error
     } finally {
       await context.close()
@@ -614,22 +625,30 @@ export class FreeFoodScraper {
 
     await Promise.all(promises)
 
+    let total = 0
     for (const { username, stories } of this.#allUserStories) {
       for (const { storyId, postId, imageUrl, timestamp } of stories) {
         const sourceId = `story/${username}/${storyId}`
         const url = postId
           ? `https://www.instagram.com/p/${postId}/`
           : `https://www.instagram.com/stories/${username}/${storyId}/`
-        await this.#insertIfNew(sourceId, url, [imageUrl], timestamp)
+        total += await this.#insertIfNew(sourceId, url, [imageUrl], timestamp)
       }
     }
     for (const { username, postId, caption, imageUrls, timestamp } of this
       .#allTimelinePosts) {
       const sourceId = `post/${username}/${postId}`
       const url = `https://www.instagram.com/p/${postId}/`
-      await this.#insertIfNew(sourceId, url, imageUrls, timestamp, caption)
+      total += await this.#insertIfNew(
+        sourceId,
+        url,
+        imageUrls,
+        timestamp,
+        caption
+      )
     }
 
-    this.#log('ok gamers we done')
+    this.#log('[insert] ok gamers we done')
+    return total
   }
 }
