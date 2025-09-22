@@ -1,10 +1,13 @@
 import type { Part } from '@google/genai'
 import { GoogleGenAI } from '@google/genai'
+import { Client } from 'discord.js'
+import fs from 'fs/promises'
 import { Collection, MongoClient } from 'mongodb'
 import type { Response } from 'playwright'
 import playwright from 'playwright'
 import sharp from 'sharp'
 import { displayError } from './display-error'
+import { notify } from './notify'
 
 let collectionPromise: Promise<Collection<ScrapedEvent>> | undefined
 
@@ -255,7 +258,7 @@ export class FreeFoodScraper {
       this.logs += '\n'
     }
     this.logs += message
-    console.error(message)
+    // console.error(message)
   }
 
   async #fetchImage (url: string, retries = 0): Promise<ArrayBuffer> {
@@ -491,6 +494,8 @@ export class FreeFoodScraper {
   }
 
   async main (): Promise<number> {
+    await fs.rm('data/free-food-debug-screenshot.png', { force: true })
+
     const browser = await playwright.firefox.launch()
     const context = await browser.newContext()
     await context.addCookies(
@@ -651,4 +656,61 @@ export class FreeFoodScraper {
     this.#log('[insert] ok gamers we done')
     return total
   }
+}
+
+/**
+ * Gets the next time to scrape Instagram:
+ * - 10 am and 5 pm most days
+ * - just 5 pm on Sunday
+ * - 10 am, 12 pm, and 5 pm on Monday
+ *
+ * floofy-bot runs in Pacific Time I think, but this would break otherwise
+ */
+function getNextTime () {
+  const date = new Date()
+  date.setMinutes(Math.floor(Math.random() * 60))
+  if (date.getHours() >= 17) {
+    // If it's already 5 pm, go on to the next day
+    date.setDate(date.getDate() + 1)
+    date.setHours(date.getDay() === 0 ? 17 : 10)
+  } else if (date.getHours() < 10) {
+    date.setHours(10)
+  } else if (date.getDay() === 1 && date.getHours() < 12) {
+    date.setHours(12)
+  } else {
+    date.setHours(17)
+  }
+  return date
+}
+
+async function scrapeFreeFood (client: Client): Promise<void> {
+  const scraper = new FreeFoodScraper()
+  try {
+    const added = await scraper.main()
+    await notify(client, `${added} events added.`)
+  } catch (error) {
+    await notify(client, `\`\`\`\n${scraper.logs.slice(-2000)}\n\`\`\``)
+    await notify(client, `\`\`\`\n${displayError(error)}\n\`\`\``, {
+      color: 'error',
+      pingOwner: true,
+      file: await fs
+        .stat('data/free-food-debug-screenshot.png')
+        .then(() => 'data/free-food-debug-screenshot.png')
+        .catch(() => undefined)
+    })
+  }
+}
+
+export async function autoFreeFood (client: Client): Promise<void> {
+  let nextTime = getNextTime()
+  setInterval(() => {
+    if (Date.now() >= nextTime.getTime()) {
+      scrapeFreeFood(client)
+      nextTime = getNextTime()
+    }
+  }, 60 * 1000)
+  await notify(
+    client,
+    `The first scrape will be <t:${Math.floor(nextTime.getTime() / 1000)}>.`
+  )
 }

@@ -4,6 +4,9 @@ import fs from 'fs-extra'
 import * as cmd from './commands'
 import parseCommand from './utils/parseCommand'
 import select from './utils/select'
+import { notify } from './utils/notify'
+import { displayError } from './utils/display-error'
+import { autoFreeFood } from './utils/free-food'
 
 config()
 
@@ -305,8 +308,13 @@ client.on('messageReactionRemove', async (reaction, user) => {
   cmd.reactionRoles.onReact(reaction, user, false)
 })
 
-process.on('unhandledRejection', reason => {
-  console.error(reason)
+process.on('unhandledRejection', async reason => {
+  try {
+    console.error(reason)
+    // Risky because if `notify` does not await a rejecting promise then this
+    // might infinite loop
+    await notify(client, displayError(reason), { color: 'error' })
+  } catch {}
 })
 process.on('uncaughtException', reason => {
   console.error(reason)
@@ -329,7 +337,13 @@ fs.ensureDir('./data/')
     ])
   )
   .then(() => client.login(process.env.TOKEN))
-  .then(() => Promise.all([cmd.minecraft.init(client), cmd.ucpd.init(client)]))
+  .then(() =>
+    Promise.all([
+      cmd.minecraft.init(client),
+      cmd.ucpd.init(client),
+      autoFreeFood(client)
+    ])
+  )
   .catch(err => {
     console.error(err)
     process.exit(1)
