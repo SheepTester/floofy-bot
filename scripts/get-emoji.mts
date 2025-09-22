@@ -1,66 +1,39 @@
 import * as z from 'zod'
 
-type Emoji = {
-  names: string[]
-  surrogates: string
-  unicodeVersion: number
-
-  hasDiversity?: true
-  hasMultiDiversity?: true
-  diversityChildren?: {
-    names: string[]
-    surrogates: string
-    unicodeVersion: number
-
-    hasDiversityParent?: true
-    hasMultiDiversityParent?: true
-    diversity: string[]
-  }[]
+const EmojiBase = {
+  names: z.array(z.string()),
+  surrogates: z.string(),
+  unicodeVersion: z.number()
 }
-const Emoji = z.record(
-  z.string(),
-  z.array(
-    z
-      .object({
-        names: z.array(z.string()),
-        surrogates: z.string(),
-        unicodeVersion: z.number(),
 
+const Emoji = z.object({
+  emojis: z.array(
+    z.union([
+      z.strictObject({
+        ...EmojiBase,
+        spriteIndex: z.number().optional(),
         hasDiversity: z.literal(true).optional(),
         hasMultiDiversity: z.literal(true).optional(),
-        diversityChildren: z
-          .array(
-            z
-              .object({
-                names: z.array(z.string()),
-                surrogates: z.string(),
-                unicodeVersion: z.number(),
-
-                hasDiversityParent: z.literal(true).optional(),
-                hasMultiDiversityParent: z.literal(true).optional(),
-                diversity: z.array(z.string())
-              })
-              .strict()
-          )
-          .optional()
+        diversityChildren: z.array(z.number()).optional()
+      }),
+      z.strictObject({
+        ...EmojiBase,
+        hasDiversityParent: z.literal(true).optional(),
+        hasMultiDiversityParent: z.literal(true).optional(),
+        diversity: z.array(z.string()).optional()
       })
-      .strict()
+    ])
   )
-)
+})
 
 // Record of emoji categories
 async function onEmojiData (
-  emojiData: Record<string, Emoji[]>,
+  emojiData: z.infer<typeof Emoji>,
   preview: number = 0
 ) {
-  const surrogates = Object.values(emojiData)
-    .flatMap(emoji =>
-      emoji.flatMap(({ surrogates, diversityChildren = [] }) => [
-        surrogates,
-        ...diversityChildren.map(({ surrogates }) => surrogates)
-      ])
-    )
-    .sort((a, b) => b.length - a.length)
+  const surrogates = emojiData.emojis
+    .flatMap(({ surrogates }) => surrogates)
+    .sort((a, b) => a.localeCompare(b))
   console.log(JSON.stringify(surrogates, null, '\t').replaceAll('\t', ''))
 
   // Longest emoji names because why not?
@@ -90,11 +63,8 @@ async function onEmojiData (
     console.error('With tones')
     displayNames(
       Object.values(emojiData).flatMap(emoji =>
-        emoji.flatMap(({ names, surrogates, diversityChildren = [] }) => [
-          ...names.map(name => ({ name, surrogates })),
-          ...diversityChildren.flatMap(({ names, surrogates }) =>
-            names.map(name => ({ name, surrogates }))
-          )
+        emoji.flatMap(({ names, surrogates }) => [
+          ...names.map(name => ({ name, surrogates }))
         ])
       )
     )
@@ -104,7 +74,7 @@ async function onEmojiData (
 const html = await fetch('https://discord.com/channels/@me').then(r => r.text())
 
 for (const match of html.matchAll(
-  /<script src="(\/assets\/[a-z0-9.]+\.js)"/g
+  /<script(?: defer)? src="(\/assets\/[a-z0-9.]+\.js)"/g
 )) {
   const js = await fetch(new URL(match[1], 'https://discord.com')).then(r =>
     r.text()
