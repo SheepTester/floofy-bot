@@ -4,6 +4,14 @@ A simple Discord bot made with Discord.js for personal use
 
 ## Use
 
+Install dependencies:
+
+```sh
+npm install
+# not necessary; free food-related components will fail gracefully
+npx playwright install firefox
+```
+
 Edit `.env` per `.env.example`, then do
 
 ```sh

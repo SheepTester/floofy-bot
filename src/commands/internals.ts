@@ -52,6 +52,7 @@ export async function exit (message: Message): Promise<void> {
     await reportExec('git checkout -- package-lock.json')
     await reportExec('git pull')
     await reportExec('npm install')
+    await reportExec('npx playwright install firefox')
     process.exit()
   } else {
     await message.reply(
