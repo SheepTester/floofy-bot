@@ -1,4 +1,4 @@
-import * as z from 'https://deno.land/x/zod@v3.17.3/mod.ts'
+import * as z from 'zod'
 
 type Emoji = {
   names: string[]
@@ -18,6 +18,7 @@ type Emoji = {
   }[]
 }
 const Emoji = z.record(
+  z.string(),
   z.array(
     z
       .object({
@@ -123,7 +124,7 @@ for (const match of html.matchAll(
       await onEmojiData(result.data, 0)
     } else {
       console.error(result.error)
-      Deno.exit(1)
+      process.exit(1)
     }
     break
   }
