@@ -7,11 +7,14 @@ import CachedMap from '../utils/CachedMap'
 
 type TextObject = {
   content: string
-  // probably not very useful
+  /** true when content is empty it seems? I wouldn't count on it though */
   hasEol: boolean
   x: number
   /** +y is up */
   y: number
+  width: number
+  /** sometimes zero, i think if there's no glyphs */
+  height: number
 }
 
 export type Report = {
@@ -37,10 +40,10 @@ const FIELDS = [
 const BASE_URL =
   'https://www.police.ucsd.edu/docs/reports/CallsandArrests/CallsForService/'
 
-async function getReports (fileName: string): Promise<Report[]> {
+export async function getReports (fileName: string): Promise<Report[]> {
   const reports: Report[] = []
   const pdf = await getDocument({
-    url: BASE_URL + fileName,
+    url: `${BASE_URL}/${fileName}`,
     useSystemFonts: true,
     verbosity: VerbosityLevel.ERRORS
   }).promise
@@ -48,35 +51,83 @@ async function getReports (fileName: string): Promise<Report[]> {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i)
       const { items } = await page.getTextContent()
-      const pageText = items
+      const textObjects = items
         .filter(item => 'transform' in item)
         .map(
           (item): TextObject => ({
             content: item.str,
             hasEol: item.hasEOL,
             x: item.transform[4],
-            y: item.transform[5]
+            y: item.transform[5],
+            width: item.width,
+            height: item.height
           })
         )
         .sort(
           // Sort from top to bottom, then left to right
           (a, b) => (Math.abs(a.y - b.y) > 0.1 ? b.y - a.y : a.x - b.x)
         )
-        .map(t => t.content)
-        .filter(content => content.trim().length > 0)
+
+      let text = ''
+      let lastObject: TextObject | null = null
+      for (const object of textObjects) {
+        if (object.content.trim().length === 0) {
+          text += object.content
+          continue
+        }
+        if (lastObject) {
+          if (lastObject.y - object.y > 0.1) {
+            // New line
+            text += '\n'
+          } else if (object.x - (lastObject.x + lastObject.width) > 3) {
+            // Horizontal space
+            text += '\t'
+          }
+        }
+        text += object.content
+        lastObject = object
+      }
+
+      const pageText = text
+        .trim()
+        .split(/\t|\n/)
+        .map(content => content.trim())
 
       if (
-        pageText[0] !== 'UCSD POLICE DEPARTMENT' &&
-        pageText[1] !== 'CRIME AND FIRE LOG/MEDIA BULLETIN'
+        pageText[0] === 'UCSD POLICE DEPARTMENT' &&
+        pageText[1] === 'CRIME AND FIRE LOG/MEDIA BULLETIN'
       ) {
-        throw new Error('page does not start with UCPD header')
+        // pageText[2] is the date
+        pageText.splice(0, 3)
+      } else {
+        throw new Error(
+          `${fileName}: page ${i} does not start with UCPD header:\n${pageText
+            .slice(0, 5)
+            .join('\n')}`
+        )
       }
-      pageText.splice(0, 3)
 
       const indices: number[] = []
       for (const [i, content] of pageText.entries()) {
         if (content === 'Date Reported') {
           indices.push(i - 2)
+        }
+      }
+
+      if (indices[0] > 0) {
+        // More text before first crime on page. This only happens for Sun God
+        // (e.g. May 3, 2025)
+        console.warn(
+          `${fileName}: text before first crime on page:`,
+          indices,
+          'adding this text to last disposition'
+        )
+        if (reports.length > 0) {
+          const lastReport = reports[reports.length - 1]
+          lastReport.disposition +=
+            ' ' + pageText.slice(0, indices[0]).join(' ')
+        } else {
+          throw new Error(`${fileName}: text before first crime`)
         }
       }
 
@@ -119,6 +170,9 @@ async function getReports (fileName: string): Promise<Report[]> {
     }
   } finally {
     await pdf.destroy()
+  }
+  if (reports.length === 0) {
+    throw new Error(`No reports found in ${fileName}. Something went wrong.`)
   }
   return reports
 }
