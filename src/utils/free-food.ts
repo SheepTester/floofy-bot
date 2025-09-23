@@ -250,6 +250,7 @@ let geminiReady = Promise.resolve()
 export class FreeFoodScraper {
   #allUserStories: UserStories[] = []
   #allTimelinePosts: TimelinePost[] = []
+  #model: 'gemini-2.0-flash' | 'gemini-2.5-flash' = 'gemini-2.0-flash'
 
   logs = ''
 
@@ -314,7 +315,7 @@ export class FreeFoodScraper {
     try {
       // TODO: turn down the temperature maybe
       const result = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: this.#model,
         contents: [
           ...images.map(
             (buffer): Part => ({
@@ -348,6 +349,7 @@ export class FreeFoodScraper {
       // ServerError: got status: 500 Internal Server Error. {"error":{"code":500,"message":"Internal error encountered.","status":"INTERNAL"}}
       // ClientError: got status: 429 Too Many Requests. {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"15"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"23s"}]}}
       // ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15\nPlease retry in 55.369243237s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"15"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"55s"}]}}
+      // ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 200\nPlease retry in 55.515718001s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"200"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"55s"}]}}
       if (
         retries < 5 &&
         error instanceof ApiError &&
@@ -359,6 +361,17 @@ export class FreeFoodScraper {
           const match = error.message.match(/"retryDelay":"(\d+)s"/)
           if (match) {
             timeout = +match[1] + 5
+          }
+          if (
+            error.message.includes('GenerateRequestsPerDayPerProjectPerModel')
+          ) {
+            if (this.#model === 'gemini-2.0-flash') {
+              this.#model = 'gemini-2.5-flash'
+            } else {
+              throw new Error(
+                'Doomed. All the models I hardcoded into the bot have run out of daily quota.'
+              )
+            }
           }
         }
         this.#log(

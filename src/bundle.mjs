@@ -4690,6 +4690,7 @@ async function onReact2(reaction, user, added) {
 // src/commands/ucpd.ts
 var ucpd_exports = {};
 __export(ucpd_exports, {
+  getReports: () => getReports,
   init: () => init2,
   onReady: () => onReady7,
   showReport: () => showReport,
@@ -4709,7 +4710,7 @@ var BASE_URL = "https://www.police.ucsd.edu/docs/reports/CallsandArrests/CallsFo
 async function getReports(fileName) {
   const reports = [];
   const pdf = await getDocument({
-    url: BASE_URL + fileName,
+    url: `${BASE_URL}/${fileName}`,
     useSystemFonts: true,
     verbosity: VerbosityLevel.ERRORS
   }).promise;
@@ -4717,25 +4718,62 @@ async function getReports(fileName) {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const { items } = await page.getTextContent();
-      const pageText = items.filter((item) => "transform" in item).map(
+      const textObjects = items.filter((item) => "transform" in item).map(
         (item) => ({
           content: item.str,
           hasEol: item.hasEOL,
           x: item.transform[4],
-          y: item.transform[5]
+          y: item.transform[5],
+          width: item.width,
+          height: item.height
         })
       ).sort(
         // Sort from top to bottom, then left to right
         (a, b) => Math.abs(a.y - b.y) > 0.1 ? b.y - a.y : a.x - b.x
-      ).map((t) => t.content).filter((content) => content.trim().length > 0);
-      if (pageText[0] !== "UCSD POLICE DEPARTMENT" && pageText[1] !== "CRIME AND FIRE LOG/MEDIA BULLETIN") {
-        throw new Error("page does not start with UCPD header");
+      );
+      let text = "";
+      let lastObject = null;
+      for (const object of textObjects) {
+        if (object.content.trim().length === 0) {
+          text += object.content;
+          continue;
+        }
+        if (lastObject) {
+          if (lastObject.y - object.y > 0.1) {
+            text += "\n";
+          } else if (object.x - (lastObject.x + lastObject.width) > 3) {
+            text += "	";
+          }
+        }
+        text += object.content;
+        lastObject = object;
       }
-      pageText.splice(0, 3);
+      const pageText = text.trim().split(/\t|\n/).map((content) => content.trim());
+      if (pageText[0] === "UCSD POLICE DEPARTMENT" && pageText[1] === "CRIME AND FIRE LOG/MEDIA BULLETIN") {
+        pageText.splice(0, 3);
+      } else {
+        throw new Error(
+          `${fileName}: page ${i} does not start with UCPD header:
+${pageText.slice(0, 5).join("\n")}`
+        );
+      }
       const indices = [];
       for (const [i2, content] of pageText.entries()) {
         if (content === "Date Reported") {
           indices.push(i2 - 2);
+        }
+      }
+      if (indices[0] > 0) {
+        console.warn(
+          `${fileName}: text before first crime on page:`,
+          indices,
+          "adding this text to last disposition"
+        );
+        if (reports.length > 0) {
+          const lastReport = reports[reports.length - 1];
+          lastReport.disposition += " " + pageText.slice(0, indices[0]).join(" ");
+        } else {
+          throw new Error(`${fileName}: text before first crime`);
         }
       }
       for (let i2 = 0; i2 < indices.length; i2++) {
@@ -4776,6 +4814,9 @@ async function getReports(fileName) {
     }
   } finally {
     await pdf.destroy();
+  }
+  if (reports.length === 0) {
+    throw new Error(`No reports found in ${fileName}. Something went wrong.`);
   }
   return reports;
 }
@@ -5151,6 +5192,7 @@ var geminiReady = Promise.resolve();
 var FreeFoodScraper = class {
   #allUserStories = [];
   #allTimelinePosts = [];
+  #model = "gemini-2.0-flash";
   logs = "";
   #log(message) {
     if (this.logs) {
@@ -5200,7 +5242,7 @@ var FreeFoodScraper = class {
     ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     try {
       const result = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: this.#model,
         contents: [
           ...images.map(
             (buffer) => ({
@@ -5233,6 +5275,15 @@ var FreeFoodScraper = class {
           const match = error.message.match(/"retryDelay":"(\d+)s"/);
           if (match) {
             timeout = +match[1] + 5;
+          }
+          if (error.message.includes("GenerateRequestsPerDayPerProjectPerModel")) {
+            if (this.#model === "gemini-2.0-flash") {
+              this.#model = "gemini-2.5-flash";
+            } else {
+              throw new Error(
+                "Doomed. All the models I hardcoded into the bot have run out of daily quota."
+              );
+            }
           }
         }
         this.#log(
