@@ -1,5 +1,5 @@
 import type { Part } from '@google/genai'
-import { GoogleGenAI } from '@google/genai'
+import { ApiError, GoogleGenAI } from '@google/genai'
 import { Client } from 'discord.js'
 import fs from 'fs/promises'
 import { Collection, MongoClient } from 'mongodb'
@@ -295,13 +295,15 @@ export class FreeFoodScraper {
     await oldPromise
 
     if (geminiCalls >= 15) {
-      // max 15 RPM on free plan. 5 seconds just in case
-      const ready = starting + (60 + 5) * 1000
-      const delay = ready - Date.now()
+      // max 15 RPM on free plan
+      const ready = starting + 60 * 1000
+      const delay = Math.max(ready - Date.now(), 0)
       this.#log(
-        `[gemini] taking a ${delay / 1000} sec break to cool off on gemini`
+        `[gemini] taking a ${delay / 1000 + 5} sec break to cool off on gemini`
       )
       await new Promise(resolve => setTimeout(resolve, delay))
+      // 5 seconds just in case
+      await new Promise(resolve => setTimeout(resolve, 5000))
       geminiCalls = 0
     }
     if (geminiCalls === 0) {
@@ -345,16 +347,15 @@ export class FreeFoodScraper {
       // ServerError: got status: 503 Service Unavailable. {"error":{"code":503,"message":"The model is overloaded. Please try again later.","status":"UNAVAILABLE"}}
       // ServerError: got status: 500 Internal Server Error. {"error":{"code":500,"message":"Internal error encountered.","status":"INTERNAL"}}
       // ClientError: got status: 429 Too Many Requests. {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"15"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"23s"}]}}
+      // ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15\nPlease retry in 55.369243237s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"15"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"55s"}]}}
       if (
         retries < 5 &&
-        error instanceof Error &&
-        (error.message.includes('503 Service Unavailable.') ||
-          error.message.includes('500 Internal Server Error.') ||
-          error.message.includes('429 Too Many Requests.'))
+        error instanceof ApiError &&
+        (error.status === 503 || error.status === 500 || error.status === 429)
       ) {
         this.#log(`[gemini] ${displayError(error)}`)
         let timeout = 60 * (retries + 1) + 5
-        if (error.message.includes('429 Too Many Requests.')) {
+        if (error.status === 429) {
           const match = error.message.match(/"retryDelay":"(\d+)s"/)
           if (match) {
             timeout = +match[1] + 5
@@ -683,13 +684,22 @@ function getNextTime () {
   return date
 }
 
-async function scrapeFreeFood (client: Client): Promise<void> {
+async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
+  const start = performance.now()
+  const getFooter = () =>
+    `Took ${((performance.now() - start) / 1000).toFixed(
+      3
+    )}s. Next: <t:${Math.floor(nextTime.getTime() / 1000)}>`
   const scraper = new FreeFoodScraper()
   try {
     const added = await scraper.main()
-    await notify(client, `${added} events added.`)
+    await notify(client, `${added} events added.`, {
+      footer: getFooter()
+    })
   } catch (error) {
-    await notify(client, `\`\`\`\n${scraper.logs.slice(-2000)}\n\`\`\``)
+    await notify(client, `\`\`\`\n${scraper.logs.slice(-3000)}\n\`\`\``, {
+      footer: getFooter()
+    })
     await notify(client, `\`\`\`\n${displayError(error)}\n\`\`\``, {
       color: 'error',
       pingOwner: true,
@@ -705,8 +715,8 @@ export async function autoFreeFood (client: Client): Promise<void> {
   let nextTime = getNextTime()
   setInterval(() => {
     if (Date.now() >= nextTime.getTime()) {
-      scrapeFreeFood(client)
       nextTime = getNextTime()
+      scrapeFreeFood(client, nextTime)
     }
   }, 60 * 1000)
   await notify(

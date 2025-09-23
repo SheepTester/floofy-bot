@@ -75,15 +75,28 @@ export async function debugScraper (message: Message): Promise<void> {
   }
 
   await message.react('👀')
+  const start = performance.now()
   const scraper = new FreeFoodScraper()
   try {
     const added = await scraper.main()
+    const end = performance.now()
     await message.reply({
-      embeds: [{ description: `${added} events added.` }]
+      embeds: [
+        {
+          description: `${added} events added.`,
+          footer: { text: `Took ${((end - start) / 1000).toFixed(3)}s` }
+        }
+      ]
     })
   } catch (error) {
+    const end = performance.now()
     await message.reply({
-      embeds: [{ description: `\`\`\`\n${scraper.logs.slice(-2000)}\n\`\`\`` }]
+      embeds: [
+        {
+          description: `\`\`\`\n${scraper.logs.slice(-3000)}\n\`\`\``,
+          footer: { text: `Took ${((end - start) / 1000).toFixed(3)}s` }
+        }
+      ]
     })
     await message.reply({
       embeds: [

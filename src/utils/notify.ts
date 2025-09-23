@@ -18,11 +18,12 @@ export type NotifyOptions = {
   color?: 'info' | 'error'
   pingOwner?: boolean
   file?: string
+  footer?: string
 }
 export async function notify (
   client: Client,
   message: string,
-  { color = 'info', pingOwner = false, file }: NotifyOptions = {}
+  { color = 'info', pingOwner = false, file, footer }: NotifyOptions = {}
 ): Promise<void> {
   if (!process.env.DEBUG_CHANNEL) {
     return
@@ -34,7 +35,8 @@ export async function notify (
     embeds: [
       {
         description: message,
-        color: color === 'error' ? 0xfb2c36 : 0x00b8db
+        color: color === 'error' ? 0xfb2c36 : 0x00b8db,
+        footer: footer !== undefined ? { text: footer } : undefined
       }
     ],
     files: file ? [file] : undefined

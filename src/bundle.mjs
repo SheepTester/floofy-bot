@@ -5062,16 +5062,19 @@ __export(internals_exports, {
 import { exec } from "child_process";
 
 // src/utils/free-food.ts
-import { GoogleGenAI } from "@google/genai";
+import { ApiError, GoogleGenAI } from "@google/genai";
 import fs2 from "fs/promises";
 import { MongoClient } from "mongodb";
 import playwright from "playwright";
 import sharp from "sharp";
 
 // src/utils/display-error.ts
-function displayError(error) {
+function displayError(error, maxLength = 1800) {
   if (error instanceof Error) {
-    return error.stack ?? `${error.name}: ${error.message}`;
+    return (error.stack ?? `${error.name}: ${error.message}`).slice(
+      0,
+      maxLength
+    );
   } else {
     return `unknown error ${String(error)}`;
   }
@@ -5087,7 +5090,7 @@ async function getChannel(client2, channelId) {
     throw new Error(`channel ${channelId} does not exist D:`);
   }
 }
-async function notify(client2, message, { color = "info", pingOwner = false, file } = {}) {
+async function notify(client2, message, { color = "info", pingOwner = false, file, footer } = {}) {
   if (!process.env.DEBUG_CHANNEL) {
     return;
   }
@@ -5098,7 +5101,8 @@ async function notify(client2, message, { color = "info", pingOwner = false, fil
     embeds: [
       {
         description: message,
-        color: color === "error" ? 16460854 : 47323
+        color: color === "error" ? 16460854 : 47323,
+        footer: footer !== void 0 ? { text: footer } : void 0
       }
     ],
     files: file ? [file] : void 0
@@ -5180,12 +5184,13 @@ var FreeFoodScraper = class {
     geminiReady = geminiReady.then(() => promise);
     await oldPromise;
     if (geminiCalls >= 15) {
-      const ready = starting + (60 + 5) * 1e3;
-      const delay = ready - Date.now();
+      const ready = starting + 60 * 1e3;
+      const delay = Math.max(ready - Date.now(), 0);
       this.#log(
-        `[gemini] taking a ${delay / 1e3} sec break to cool off on gemini`
+        `[gemini] taking a ${delay / 1e3 + 5} sec break to cool off on gemini`
       );
       await new Promise((resolve2) => setTimeout(resolve2, delay));
+      await new Promise((resolve2) => setTimeout(resolve2, 5e3));
       geminiCalls = 0;
     }
     if (geminiCalls === 0) {
@@ -5221,10 +5226,10 @@ var FreeFoodScraper = class {
         ) ?? "{}"
       );
     } catch (error) {
-      if (retries < 5 && error instanceof Error && (error.message.includes("503 Service Unavailable.") || error.message.includes("500 Internal Server Error.") || error.message.includes("429 Too Many Requests."))) {
+      if (retries < 5 && error instanceof ApiError && (error.status === 503 || error.status === 500 || error.status === 429)) {
         this.#log(`[gemini] ${displayError(error)}`);
         let timeout = 60 * (retries + 1) + 5;
-        if (error.message.includes("429 Too Many Requests.")) {
+        if (error.status === 429) {
           const match = error.message.match(/"retryDelay":"(\d+)s"/);
           if (match) {
             timeout = +match[1] + 5;
@@ -5498,15 +5503,23 @@ function getNextTime() {
   }
   return date;
 }
-async function scrapeFreeFood(client2) {
+async function scrapeFreeFood(client2, nextTime) {
+  const start = performance.now();
+  const getFooter = () => `Took ${((performance.now() - start) / 1e3).toFixed(
+    3
+  )}s. Next: <t:${Math.floor(nextTime.getTime() / 1e3)}>`;
   const scraper = new FreeFoodScraper();
   try {
     const added = await scraper.main();
-    await notify(client2, `${added} events added.`);
+    await notify(client2, `${added} events added.`, {
+      footer: getFooter()
+    });
   } catch (error) {
     await notify(client2, `\`\`\`
-${scraper.logs.slice(-2e3)}
-\`\`\``);
+${scraper.logs.slice(-3e3)}
+\`\`\``, {
+      footer: getFooter()
+    });
     await notify(client2, `\`\`\`
 ${displayError(error)}
 \`\`\``, {
@@ -5520,8 +5533,8 @@ async function autoFreeFood(client2) {
   let nextTime = getNextTime();
   setInterval(() => {
     if (Date.now() >= nextTime.getTime()) {
-      scrapeFreeFood(client2);
       nextTime = getNextTime();
+      scrapeFreeFood(client2, nextTime);
     }
   }, 60 * 1e3);
   await notify(
@@ -5565,6 +5578,8 @@ async function exit(message) {
     await reportExec("git pull");
     await reportExec("npm install");
     await reportExec("npx playwright install firefox");
+    results.push("Exiting...");
+    await msg.edit(displayResults(results));
     process.exit();
   } else {
     await message.reply(
@@ -5583,17 +5598,30 @@ async function debugScraper(message) {
     return;
   }
   await message.react("\u{1F440}");
+  const start = performance.now();
   const scraper = new FreeFoodScraper();
   try {
     const added = await scraper.main();
+    const end = performance.now();
     await message.reply({
-      embeds: [{ description: `${added} events added.` }]
+      embeds: [
+        {
+          description: `${added} events added.`,
+          footer: { text: `Took ${((end - start) / 1e3).toFixed(3)}s` }
+        }
+      ]
     });
   } catch (error) {
+    const end = performance.now();
     await message.reply({
-      embeds: [{ description: `\`\`\`
-${scraper.logs.slice(-2e3)}
-\`\`\`` }]
+      embeds: [
+        {
+          description: `\`\`\`
+${scraper.logs.slice(-3e3)}
+\`\`\``,
+          footer: { text: `Took ${((end - start) / 1e3).toFixed(3)}s` }
+        }
+      ]
     });
     await message.reply({
       embeds: [
