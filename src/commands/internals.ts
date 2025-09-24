@@ -21,7 +21,7 @@ type Results = (string | undefined)[]
 
 function displayResults (results: Results): string {
   return results
-    .map(result => (result ? '```shell\n' + result + '\n```' : '👌\n'))
+    .map(result => (result ? '```shell\n' + result + '\n```' : ''))
     .join('')
 }
 
