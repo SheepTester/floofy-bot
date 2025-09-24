@@ -1,8 +1,6 @@
 import { exec } from 'child_process'
 import { Message } from 'discord.js'
 import select from '../utils/select'
-import { FreeFoodScraper } from '../utils/free-food'
-import { displayError } from '../utils/display-error'
 
 type ExecutionResult = {
   // I don't know where `ExecException` comes from
@@ -65,56 +63,5 @@ export async function exit (message: Message): Promise<void> {
         'scram plebian'
       ])
     )
-  }
-}
-
-export async function debugScraper (message: Message): Promise<void> {
-  if (message.author.id !== process.env.OWNER) {
-    await message.reply('fuck off')
-    return
-  }
-
-  await message.react('👀')
-  const start = performance.now()
-  const getFooter = () =>
-    `${((performance.now() - start) / 1000).toFixed(3)} elasped`
-  const scraper = new FreeFoodScraper()
-  try {
-    const added = await scraper.main(async () => {
-      await message.reply({
-        allowedMentions: { repliedUser: false },
-        embeds: [
-          {
-            description: `Browser has closed.`,
-            footer: { text: getFooter() }
-          }
-        ]
-      })
-    })
-    await message.reply({
-      embeds: [
-        {
-          description: `${added} events added.`,
-          footer: { text: getFooter() }
-        }
-      ]
-    })
-  } catch (error) {
-    await message.reply({
-      embeds: [
-        {
-          description: `\`\`\`\n${scraper.logs.slice(-3000)}\n\`\`\``,
-          footer: { text: getFooter() }
-        }
-      ]
-    })
-    await message.reply({
-      embeds: [
-        {
-          description: `\`\`\`\n${displayError(error)}\n\`\`\``,
-          color: 0xff0000
-        }
-      ]
-    })
   }
 }

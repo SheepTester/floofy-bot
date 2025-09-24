@@ -6,7 +6,6 @@ import parseCommand from './utils/parseCommand'
 import select from './utils/select'
 import { notify } from './utils/notify'
 import { displayError } from './utils/display-error'
-import { autoFreeFood } from './utils/free-food'
 
 config()
 
@@ -63,7 +62,7 @@ async function help (message: Message): Promise<void> {
 const ownerCommands: Record<string, Command> = {
   'ignore us please': cmd.ignore.ignore,
   exeunt: cmd.internals.exit,
-  'debug scraper': cmd.internals.debugScraper
+  'debug scraper': cmd.freeFood.debugScraper
 }
 const commands: Record<string, Command> = {
   'source of <id>': cmd.source.getSource,
@@ -341,7 +340,7 @@ fs.ensureDir('./data/')
     Promise.all([
       cmd.minecraft.init(client),
       cmd.ucpd.init(client),
-      autoFreeFood(client)
+      cmd.freeFood.init(client)
     ])
   )
   .catch(err => {

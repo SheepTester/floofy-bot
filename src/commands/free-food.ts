@@ -1,13 +1,13 @@
 import type { Part } from '@google/genai'
 import { ApiError, GoogleGenAI } from '@google/genai'
-import { Client } from 'discord.js'
+import { Client, Message } from 'discord.js'
 import fs from 'fs/promises'
 import { Collection, MongoClient } from 'mongodb'
 import type { Response } from 'playwright'
 import playwright from 'playwright'
 import sharp from 'sharp'
-import { displayError } from './display-error'
-import { notify } from './notify'
+import { displayError } from '../utils/display-error'
+import { notify } from '../utils/notify'
 
 let collectionPromise: Promise<Collection<ScrapedEvent>> | undefined
 
@@ -742,7 +742,7 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
   }
 }
 
-export async function autoFreeFood (client: Client): Promise<void> {
+export async function init (client: Client): Promise<void> {
   let nextTime = getNextTime()
   setInterval(() => {
     if (Date.now() >= nextTime.getTime()) {
@@ -754,4 +754,55 @@ export async function autoFreeFood (client: Client): Promise<void> {
     client,
     `The first scrape will be <t:${Math.floor(nextTime.getTime() / 1000)}>.`
   )
+}
+
+export async function debugScraper (message: Message): Promise<void> {
+  if (message.author.id !== process.env.OWNER) {
+    await message.reply('fuck off')
+    return
+  }
+
+  await message.react('👀')
+  const start = performance.now()
+  const getFooter = () =>
+    `${((performance.now() - start) / 1000).toFixed(3)} elasped`
+  const scraper = new FreeFoodScraper()
+  try {
+    const added = await scraper.main(async () => {
+      await message.reply({
+        allowedMentions: { repliedUser: false },
+        embeds: [
+          {
+            description: `Browser has closed.`,
+            footer: { text: getFooter() }
+          }
+        ]
+      })
+    })
+    await message.reply({
+      embeds: [
+        {
+          description: `${added} events added.`,
+          footer: { text: getFooter() }
+        }
+      ]
+    })
+  } catch (error) {
+    await message.reply({
+      embeds: [
+        {
+          description: `\`\`\`\n${scraper.logs.slice(-3000)}\n\`\`\``,
+          footer: { text: getFooter() }
+        }
+      ]
+    })
+    await message.reply({
+      embeds: [
+        {
+          description: `\`\`\`\n${displayError(error)}\n\`\`\``,
+          color: 0xff0000
+        }
+      ]
+    })
+  }
 }
