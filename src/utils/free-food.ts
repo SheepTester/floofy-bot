@@ -606,6 +606,9 @@ export class FreeFoodScraper {
       this.#log('[browser] It seems the stories have opened.')
       await page.waitForTimeout(1000)
       for (let i = 0; ; i++) {
+        if (i > 100) {
+          throw new Error('why am i on story page 100')
+        }
         // await page.screenshot({
         //   path: `data/screen-stories-${i}.png`
         //   // fullPage: true
