@@ -76,25 +76,35 @@ export async function debugScraper (message: Message): Promise<void> {
 
   await message.react('👀')
   const start = performance.now()
+  const getFooter = () =>
+    `${((performance.now() - start) / 1000).toFixed(3)} elasped`
   const scraper = new FreeFoodScraper()
   try {
-    const added = await scraper.main()
-    const end = performance.now()
+    const added = await scraper.main(async () => {
+      await message.reply({
+        allowedMentions: { repliedUser: false },
+        embeds: [
+          {
+            description: `Browser has closed.`,
+            footer: { text: getFooter() }
+          }
+        ]
+      })
+    })
     await message.reply({
       embeds: [
         {
           description: `${added} events added.`,
-          footer: { text: `Took ${((end - start) / 1000).toFixed(3)}s` }
+          footer: { text: getFooter() }
         }
       ]
     })
   } catch (error) {
-    const end = performance.now()
     await message.reply({
       embeds: [
         {
           description: `\`\`\`\n${scraper.logs.slice(-3000)}\n\`\`\``,
-          footer: { text: `Took ${((end - start) / 1000).toFixed(3)}s` }
+          footer: { text: getFooter() }
         }
       ]
     })

@@ -516,7 +516,7 @@ export class FreeFoodScraper {
     return events.length
   }
 
-  async main (): Promise<number> {
+  async main (onBrowserEnd?: () => void): Promise<number> {
     await fs.rm('data/free-food-debug-screenshot.png', { force: true })
 
     const browser = await playwright.firefox.launch()
@@ -607,12 +607,12 @@ export class FreeFoodScraper {
       await page.waitForTimeout(1000)
       for (let i = 0; ; i++) {
         if (i > 100) {
-          throw new Error('why am i on story page 100')
+          throw new Error('why am i on page 100')
         }
-        // await page.screenshot({
-        //   path: `data/screen-stories-${i}.png`
-        //   // fullPage: true
-        // })
+        await page.screenshot({
+          path: `data/screen-stories-${i}.png`
+          // fullPage: true
+        })
         let story = page.locator('css=a[href^="/stories/"]')
         // click first visible story
         story = story.first()
@@ -657,6 +657,8 @@ export class FreeFoodScraper {
       await browser.close()
       this.#log('[browser] i close the browser')
     }
+
+    onBrowserEnd?.()
 
     await Promise.all(promises)
 
