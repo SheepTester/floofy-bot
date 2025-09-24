@@ -254,24 +254,29 @@ export class FreeFoodScraper {
 
   logs = ''
 
-  #log (message: string): void {
+  #log (message: string, error?: unknown): void {
     if (this.logs) {
       this.logs += '\n'
     }
     this.logs += message
-    // console.error(message)
+    if (error !== undefined) {
+      this.logs += ' ' + error
+      // console.error(message, error)
+    } else {
+      // console.error(message)
+    }
   }
 
   async #fetchImage (url: string, retries = 0): Promise<ArrayBuffer> {
     try {
       const response = await fetch(url).catch(error => {
-        this.#log(`[image] ${displayError(error)}`)
+        this.#log('[image]', error)
         return Promise.reject(new Error(`Fetch error: ${url}`))
       })
       return response.arrayBuffer()
     } catch (error) {
       if (retries < 3) {
-        this.#log(`[image] ${displayError(error)}`)
+        this.#log('[image]', error)
         this.#log(
           `[image] fetch failed. will try again in 5 secs. retries = ${retries}`
         )
@@ -355,7 +360,7 @@ export class FreeFoodScraper {
         error instanceof ApiError &&
         (error.status === 503 || error.status === 500 || error.status === 429)
       ) {
-        this.#log(`[gemini] ${displayError(error)}`)
+        this.#log('[gemini]', error)
         let timeout = 60 * (retries + 1) + 5
         if (error.status === 429) {
           const match = error.message.match(/"retryDelay":"(\d+)s"/)
@@ -367,6 +372,9 @@ export class FreeFoodScraper {
           ) {
             if (this.#model === 'gemini-2.0-flash') {
               this.#model = 'gemini-2.5-flash'
+              this.#log(
+                `[gemini] 2.0 flash ratelimit reached, switching to 2.5 flash`
+              )
             } else {
               throw new Error(
                 'Doomed. All the models I hardcoded into the bot have run out of daily quota.'
@@ -392,7 +400,8 @@ export class FreeFoodScraper {
     const {
       data: {
         xdt_api__v1__feed__reels_media__connection: storyData,
-        xdt_api__v1__feed__timeline__connection: timelineData
+        xdt_api__v1__feed__timeline__connection: timelineData,
+        ...rest
       }
     } = response
     if (storyData) {
@@ -439,7 +448,7 @@ export class FreeFoodScraper {
       this.#log(`[graph ql] found ${timelinePosts.length} posts`)
       return
     }
-    this.#log('[graph ql] this one has no stories')
+    this.#log(`[graph ql] has no posts/stories: ${Object.keys(rest)[0]}`)
   }
 
   async #handleResponse (response: Response): Promise<void> {
@@ -597,6 +606,10 @@ export class FreeFoodScraper {
       this.#log('[browser] It seems the stories have opened.')
       await page.waitForTimeout(1000)
       for (let i = 0; ; i++) {
+        // await page.screenshot({
+        //   path: `data/screen-stories-${i}.png`
+        //   // fullPage: true
+        // })
         let story = page.locator('css=a[href^="/stories/"]')
         // click first visible story
         story = story.first()
@@ -702,7 +715,7 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
   const getFooter = () =>
     `Took ${((performance.now() - start) / 1000).toFixed(
       3
-    )}s. Next: <t:${Math.floor(nextTime.getTime() / 1000)}>`
+    )}s. Next: ${nextTime.toLocaleString('sv-SE')}`
   const scraper = new FreeFoodScraper()
   try {
     const added = await scraper.main()
