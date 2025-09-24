@@ -204,6 +204,12 @@ type ScrapedEvent = (
   url: string | null
 }
 
+type ScrapeStats = {
+  posts: number
+  stories: number
+  inserted: number
+}
+
 /**
  * prompt notes:
  * - changed phrasing of "free" to "provided" so it doesn't exclude e.g. "Lunch
@@ -516,7 +522,7 @@ export class FreeFoodScraper {
     return events.length
   }
 
-  async main (onBrowserEnd?: () => void): Promise<number> {
+  async main (onBrowserEnd?: () => void): Promise<ScrapeStats> {
     await fs.rm('data/free-food-debug-screenshot.png', { force: true })
 
     const browser = await playwright.firefox.launch()
@@ -686,7 +692,11 @@ export class FreeFoodScraper {
     }
 
     this.#log('[insert] ok gamers we done')
-    return total
+    return {
+      inserted: total,
+      posts: this.#allTimelinePosts.length,
+      stories: this.#allUserStories.length
+    }
   }
 }
 
@@ -729,10 +739,12 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
     )}. Next: ${nextTime.toLocaleString('sv-SE')}`
   const scraper = new FreeFoodScraper()
   try {
-    const added = await scraper.main()
-    await notify(client, `${added} events added.`, {
-      footer: getFooter()
-    })
+    const { inserted, posts, stories } = await scraper.main()
+    await notify(
+      client,
+      `${inserted} new events added from ${posts} posts, ${stories} stories.`,
+      { footer: getFooter() }
+    )
   } catch (error) {
     await notify(client, `\`\`\`\n${scraper.logs.slice(-3000)}\n\`\`\``, {
       footer: getFooter()
@@ -773,7 +785,7 @@ export async function debugScraper (message: Message): Promise<void> {
   const getFooter = () => `${displayTime(performance.now() - start)} elasped`
   const scraper = new FreeFoodScraper()
   try {
-    const added = await scraper.main(async () => {
+    const { inserted, posts, stories } = await scraper.main(async () => {
       await message.reply({
         allowedMentions: { repliedUser: false },
         embeds: [
@@ -787,7 +799,7 @@ export async function debugScraper (message: Message): Promise<void> {
     await message.reply({
       embeds: [
         {
-          description: `${added} events added.`,
+          description: `Saw ${posts} posts, ${stories} stories. ${inserted} new events added.`,
           footer: { text: getFooter() }
         }
       ]

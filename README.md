@@ -40,3 +40,5 @@ npm install -g node-windows
 npm link node-windows
 node scripts/create-windows-service.js
 ```
+
+If Moofy's fallen and it can't get up, open the Windows "Services" app and look for "Floofy Bot." Its farts and noises are logged to Event Viewer.
