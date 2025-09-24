@@ -21,8 +21,8 @@ type Results = (string | undefined)[]
 
 function displayResults (results: Results): string {
   return results
-    .map(result => (result ? '```sh\n' + result + '\n```' : '👌'))
-    .join('\n')
+    .map(result => (result ? '```shell\n' + result + '\n```' : '👌\n'))
+    .join('')
 }
 
 export async function exit (message: Message): Promise<void> {
@@ -51,6 +51,7 @@ export async function exit (message: Message): Promise<void> {
     await reportExec('git pull')
     await reportExec('npm install')
     await reportExec('npx playwright install firefox')
+    await reportExec('npm run build')
     results.push('Exiting...')
     await msg.edit(displayResults(results))
     process.exit()

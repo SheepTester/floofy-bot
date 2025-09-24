@@ -715,12 +715,18 @@ function getNextTime () {
   return date
 }
 
+const displayTime = (milliseconds: number) => {
+  const seconds = milliseconds / 1000
+  const min = Math.floor(seconds / 60)
+  return `${min}:${(seconds % 60).toFixed(3).padStart('00.000'.length, '0')}`
+}
+
 async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
   const start = performance.now()
   const getFooter = () =>
-    `Took ${((performance.now() - start) / 1000).toFixed(
-      3
-    )}s. Next: ${nextTime.toLocaleString('sv-SE')}`
+    `Took ${displayTime(
+      performance.now() - start
+    )}. Next: ${nextTime.toLocaleString('sv-SE')}`
   const scraper = new FreeFoodScraper()
   try {
     const added = await scraper.main()
@@ -764,8 +770,7 @@ export async function debugScraper (message: Message): Promise<void> {
 
   await message.react('👀')
   const start = performance.now()
-  const getFooter = () =>
-    `${((performance.now() - start) / 1000).toFixed(3)} elasped`
+  const getFooter = () => `${displayTime(performance.now() - start)} elasped`
   const scraper = new FreeFoodScraper()
   try {
     const added = await scraper.main(async () => {

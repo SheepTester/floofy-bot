@@ -15,17 +15,81 @@ import { Client as Client2, GatewayIntentBits, Partials } from "discord.js";
 import { config } from "dotenv";
 import fs3 from "fs-extra";
 
-// src/commands/poll-reactions.ts
-var poll_reactions_exports = {};
-__export(poll_reactions_exports, {
-  getReactions: () => getReactions,
-  notPollChannel: () => notPollChannel,
-  onReady: () => onReady,
-  pollChannel: () => pollChannel
+// src/commands/avatar.ts
+var avatar_exports = {};
+__export(avatar_exports, {
+  avatar: () => avatar,
+  warm: () => warm
+});
+
+// src/utils/select.ts
+function select(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+// src/commands/avatar.ts
+async function avatar(message, [userId = message.author.id]) {
+  const user = await message.client.users.fetch(userId).catch(() => null);
+  if (user) {
+    await message.reply({
+      content: select([
+        "too blue for my tastes",
+        "why does it look so bad up close",
+        "i regret having eyes"
+      ]),
+      embeds: [
+        {
+          image: {
+            url: user.displayAvatarURL({ extension: "png", size: 4096 })
+          }
+        }
+      ]
+    });
+  } else {
+    await message.reply({
+      embeds: [
+        {
+          description: select([
+            `no idea who <@${userId}> is`,
+            `<@${userId}>? dont know em`,
+            `stop making up people!! <@${userId}> is about as real as the grass you touched this morning: it doesn't exist`
+          ])
+        }
+      ]
+    });
+  }
+}
+async function warm(message, [userId]) {
+  const user = await message.client.users.fetch(userId).catch(() => null);
+  if (user) {
+    user.send(
+      `You were warmed in [${message.guild?.name ?? "DMs"}](${message.url}). Reason: <@${message.author.id}> thought you needed warmth. \u{1F970}`
+    ).catch(() => {
+    });
+    await message.reply({
+      embeds: [
+        { color: 16612098, description: `\u{1F970} <@${userId}> has been warmed.` }
+      ]
+    });
+  } else {
+    await message.reply({
+      embeds: [
+        { color: 15286850, description: `\u{1F614} Couldn't warm <@${userId}>.` }
+      ]
+    });
+  }
+}
+
+// src/commands/emoji-usage.ts
+var emoji_usage_exports = {};
+__export(emoji_usage_exports, {
+  getUsage: () => getUsage,
+  onMessage: () => onMessage,
+  onReact: () => onReact,
+  onReady: () => onReady
 });
 import {
-  DMChannel,
-  PermissionFlagsBits
+  GuildEmoji
 } from "discord.js";
 
 // src/utils/CachedMap.ts
@@ -63,6 +127,947 @@ var CachedMap = class {
     await fs.writeFile(this.#path, JSON.stringify(this.#object, null, "	"));
   }
 };
+
+// src/commands/emoji-usage.ts
+var customEmojiRegex = /<a?:\w+:(\d+)>/g;
+var emojiUsage = new CachedMap("./data/emoji-usage.json");
+var onReady = emojiUsage.read;
+async function getUsage(message) {
+  if (!message.guild) {
+    await message.reply("i dont track emojis in dms sry");
+    return;
+  }
+  await message.reply({
+    embeds: [
+      {
+        description: Array.from(
+          // Force fetch in case emoji changed
+          await message.guild.emojis.fetch(void 0, { force: true }),
+          ([emojiId, { animated }]) => ({
+            emoji: `<${animated ? "a" : ""}:w:${emojiId}>`,
+            count: emojiUsage.get(`${message.guildId}-${emojiId}`, 0)
+          })
+        ).sort((a, b) => b.count - a.count).map(({ emoji, count }) => `${emoji} ${count}`).join("\n")
+      }
+    ]
+  });
+}
+async function onMessage(message) {
+  if (!message.guildId) {
+    return;
+  }
+  const emojis = new Set(
+    Array.from(
+      message.content.matchAll(customEmojiRegex),
+      ([, emojiId]) => emojiId
+    )
+  );
+  for (const emojiId of emojis) {
+    const id = `${message.guildId}-${emojiId}`;
+    emojiUsage.set(id, emojiUsage.get(id, 0) + 1);
+  }
+  emojiUsage.save();
+}
+async function onReact(reaction) {
+  if (reaction.partial) {
+    reaction = await reaction.fetch();
+  }
+  if (reaction.count === 1 && !(reaction.emoji instanceof GuildEmoji && reaction.emoji.guild.id !== reaction.message.guildId)) {
+    const id = `${reaction.message.guildId}-${reaction.emoji.id}`;
+    emojiUsage.set(id, emojiUsage.get(id, 0) + 1);
+  }
+  emojiUsage.save();
+}
+
+// src/commands/free-food.ts
+var free_food_exports = {};
+__export(free_food_exports, {
+  FreeFoodScraper: () => FreeFoodScraper,
+  debugScraper: () => debugScraper,
+  init: () => init
+});
+import { ApiError, GoogleGenAI } from "@google/genai";
+import fs2 from "fs/promises";
+import { MongoClient } from "mongodb";
+import playwright from "playwright";
+import sharp from "sharp";
+
+// src/utils/display-error.ts
+function displayError(error, maxLength = 1800) {
+  if (error instanceof Error) {
+    return (error.stack ?? `${error.name}: ${error.message}`).slice(
+      0,
+      maxLength
+    );
+  } else {
+    return `unknown error ${String(error)}`;
+  }
+}
+
+// src/utils/notify.ts
+var channelPromise;
+async function getChannel(client2, channelId) {
+  const channel = await client2.channels.fetch(channelId);
+  if (channel?.isTextBased()) {
+    return channel;
+  } else {
+    throw new Error(`channel ${channelId} does not exist D:`);
+  }
+}
+async function notify(client2, message, { color = "info", pingOwner = false, file, footer } = {}) {
+  if (!process.env.DEBUG_CHANNEL) {
+    return;
+  }
+  channelPromise ??= getChannel(client2, process.env.DEBUG_CHANNEL);
+  const channel = await channelPromise;
+  await channel.send({
+    content: pingOwner ? `<@${process.env.OWNER}>` : "",
+    embeds: [
+      {
+        description: message,
+        color: color === "error" ? 16460854 : 47323,
+        footer: footer !== void 0 ? { text: footer } : void 0
+      }
+    ],
+    files: file ? [file] : void 0
+  });
+}
+
+// src/commands/free-food.ts
+var collectionPromise;
+async function getCollection() {
+  const client2 = new MongoClient(
+    `mongodb+srv://${process.env.FREE_FOOD_MONGO_USERPASS}@bruh.duskolx.mongodb.net/?retryWrites=true&w=majority&appName=Bruh`
+  );
+  await client2.connect();
+  const db = client2.db("events_db");
+  return db.collection("events_collection");
+}
+function selectBest(candidates, excludeSquare = false) {
+  return candidates.reduce(
+    (cum, curr) => {
+      if (excludeSquare && curr.width === curr.height) {
+        return cum;
+      }
+      return curr.width > cum.width ? curr : cum;
+    },
+    { width: 0, height: 0, url: "" }
+  ).url;
+}
+var schemaPrompt = `output only a JSON array of event objects without any explanation or formatting, whose contents each conform to the following schema.
+
+{
+  "provided": string[], // List of tangible items (i.e. food and merch) provided at the event, if any, using the original phrasing from the post (e.g. "Dirty Birds", "Tapex", "boba", "refreshments", "snacks", "food", "T-shirt"). Exclude items that must be purchased (e.g. fundraisers or discounts).
+  "location": string,
+  "date": { "year": number; "month": number; "date": number }, // Month is between 1 and 12
+  "start": { "hour": number; "minute": number }, // 24-hour format. Tip: something like "6-9 pm" is the same as "6 pm to 9 pm"
+  "end": { "hour": number; "minute": number } // 24-hour format, optional and omitted if no end time specified
+}`;
+var fmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Los_Angeles",
+  dateStyle: "long"
+  // omit time or gemini will use the current time for the event :/
+});
+var ai;
+var geminiCalls = 0;
+var starting = 0;
+var geminiReady = Promise.resolve();
+var FreeFoodScraper = class {
+  #allUserStories = [];
+  #allTimelinePosts = [];
+  #model = "gemini-2.0-flash";
+  logs = "";
+  #log(message, error) {
+    if (this.logs) {
+      this.logs += "\n";
+    }
+    this.logs += message;
+    if (error !== void 0) {
+      this.logs += " " + error;
+    } else {
+    }
+  }
+  async #fetchImage(url, retries = 0) {
+    try {
+      const response = await fetch(url).catch((error) => {
+        this.#log("[image]", error);
+        return Promise.reject(new Error(`Fetch error: ${url}`));
+      });
+      return response.arrayBuffer();
+    } catch (error) {
+      if (retries < 3) {
+        this.#log("[image]", error);
+        this.#log(
+          `[image] fetch failed. will try again in 5 secs. retries = ${retries}`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 5 * 1e3));
+        return this.#fetchImage(url, retries + 1);
+      } else {
+        throw error;
+      }
+    }
+  }
+  async #readImages(images, timestamp, caption, retries = 0) {
+    const { promise, resolve } = Promise.withResolvers();
+    const oldPromise = geminiReady;
+    geminiReady = geminiReady.then(() => promise);
+    await oldPromise;
+    if (geminiCalls >= 15) {
+      const ready = starting + 60 * 1e3;
+      const delay = Math.max(ready - Date.now(), 0);
+      this.#log(
+        `[gemini] taking a ${delay / 1e3 + 5} sec break to cool off on gemini`
+      );
+      await new Promise((resolve2) => setTimeout(resolve2, delay));
+      await new Promise((resolve2) => setTimeout(resolve2, 5e3));
+      geminiCalls = 0;
+    }
+    if (geminiCalls === 0) {
+      starting = Date.now();
+    }
+    geminiCalls++;
+    ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    try {
+      const result = await ai.models.generateContent({
+        model: this.#model,
+        contents: [
+          ...images.map(
+            (buffer) => ({
+              inlineData: {
+                data: Buffer.from(buffer).toString("base64"),
+                mimeType: "image/jpeg"
+              }
+            })
+          ),
+          {
+            text: `Using the following flyer${images.length !== 1 ? "s" : ""}${caption ? " and caption" : ""}, which was posted ${fmt.format(timestamp)}, ${schemaPrompt}` + (caption ? "\n\n" + caption : "")
+          }
+        ],
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+      return JSON.parse(
+        // sometimes will generate `"minute": 05` or `00`
+        result.text?.replace(
+          /"minute":\s*0+([0-9])/,
+          (_, digit) => `"minute": ${digit}`
+        ) ?? "{}"
+      );
+    } catch (error) {
+      if (retries < 5 && error instanceof ApiError && (error.status === 503 || error.status === 500 || error.status === 429)) {
+        this.#log("[gemini]", error);
+        let timeout = 60 * (retries + 1) + 5;
+        if (error.status === 429) {
+          const match = error.message.match(/"retryDelay":"(\d+)s"/);
+          if (match) {
+            timeout = +match[1] + 5;
+          }
+          if (error.message.includes("GenerateRequestsPerDayPerProjectPerModel")) {
+            if (this.#model === "gemini-2.0-flash") {
+              this.#model = "gemini-2.5-flash";
+              this.#log(
+                `[gemini] 2.0 flash ratelimit reached, switching to 2.5 flash`
+              );
+            } else {
+              throw new Error(
+                "Doomed. All the models I hardcoded into the bot have run out of daily quota."
+              );
+            }
+          }
+        }
+        this.#log(
+          `[gemini] cooling off for ${timeout} secs then retrying. retries = ${retries}`
+        );
+        await new Promise((resolve2) => setTimeout(resolve2, timeout * 1e3));
+        resolve();
+        return this.#readImages(images, timestamp, caption, retries + 1);
+      } else {
+        throw error;
+      }
+    } finally {
+      resolve();
+    }
+  }
+  async #handleGraphQlResponse(response) {
+    const {
+      data: {
+        xdt_api__v1__feed__reels_media__connection: storyData,
+        xdt_api__v1__feed__timeline__connection: timelineData,
+        ...rest
+      }
+    } = response;
+    if (storyData) {
+      const userStories = storyData.edges.map(
+        ({ node: user }) => ({
+          username: user.user.username,
+          stories: user.items.map((item) => {
+            return {
+              imageUrl: selectBest(item.image_versions2.candidates, true),
+              postId: item.story_feed_media?.[0].media_code ?? null,
+              storyId: item.pk,
+              timestamp: new Date(item.taken_at * 1e3)
+            };
+          })
+        })
+      );
+      this.#allUserStories.push(...userStories);
+      this.#log(`[graph ql] found ${userStories.length} stories`);
+      return;
+    }
+    if (timelineData) {
+      const timelinePosts = timelineData.edges.flatMap(
+        ({ node: { media } }) => {
+          if (!media) {
+            return [];
+          }
+          const images = media.carousel_media ?? [media];
+          return [
+            {
+              username: media.owner.username,
+              caption: media.caption?.text ?? "",
+              imageUrls: images.map(
+                ({ image_versions2 }) => selectBest(image_versions2.candidates)
+              ),
+              postId: media.code,
+              timestamp: new Date(media.taken_at * 1e3)
+            }
+          ];
+        }
+      );
+      this.#allTimelinePosts.push(...timelinePosts);
+      this.#log(`[graph ql] found ${timelinePosts.length} posts`);
+      return;
+    }
+    this.#log(`[graph ql] has no posts/stories: ${Object.keys(rest)[0]}`);
+  }
+  async #handleResponse(response) {
+    const url = response.url();
+    if (new URL(url).pathname === "/graphql/query") {
+      const buffer = await response.body();
+      await this.#handleGraphQlResponse(JSON.parse(buffer.toString("utf-8")));
+    }
+  }
+  async #insertIfNew(sourceId, url, imageUrls, timestamp, caption) {
+    collectionPromise ??= getCollection();
+    const collection = await collectionPromise;
+    const existingDoc = await collection.findOne({ sourceId });
+    if (existingDoc) {
+      this.#log(`[insert] ${sourceId} already added`);
+      return 0;
+    }
+    const images = await Promise.all(
+      imageUrls.map((url2) => this.#fetchImage(url2))
+    );
+    const events = (await this.#readImages(images, timestamp, caption)).filter(
+      (event) => (event.provided ?? []).length > 0
+    );
+    if (events.length > 0) {
+      for (const event of events) {
+        if (event.date.year !== (/* @__PURE__ */ new Date()).getFullYear()) {
+          this.#log(`[insert] ${JSON.stringify(event)} is in a weird year`);
+        }
+      }
+      const buffer = await sharp(images[0]).resize(80, 100, { fit: "cover" }).webp({ quality: 20 }).toBuffer();
+      const previewData = buffer.toString("base64");
+      await collection.insertMany(
+        events.map(
+          ({ provided, ...event }) => ({
+            freeFood: provided,
+            ...event,
+            sourceId,
+            url,
+            previewData,
+            postTimestamp: timestamp,
+            caption,
+            result: true
+          })
+        )
+      );
+    } else {
+      await collection.insertOne({
+        sourceId,
+        url,
+        result: false
+      });
+    }
+    this.#log(`[insert] ${sourceId} added ${JSON.stringify(events)}`);
+    return events.length;
+  }
+  async main(onBrowserEnd) {
+    await fs2.rm("data/free-food-debug-screenshot.png", { force: true });
+    const browser = await playwright.firefox.launch();
+    const context = await browser.newContext();
+    await context.addCookies(
+      Object.entries({
+        ig_nrcb: "1",
+        ps_l: "1",
+        ps_n: "1",
+        wd: "1440x825",
+        ...JSON.parse(process.env.FREE_FOOD_COOKIES ?? "{}")
+      }).map(([name, value]) => ({
+        name,
+        value: String(value),
+        path: "/",
+        domain: ".instagram.com"
+      }))
+    );
+    const page = await context.newPage();
+    const promises = [];
+    try {
+      page.on("response", (response) => {
+        promises.push(this.#handleResponse(response));
+      });
+      await page.goto("https://instagram.com/");
+      function* analyze(x) {
+        for (const req of x.require ?? []) {
+          const args = req.at(-1);
+          for (const arg of args) {
+            if (arg?.__bbox) {
+              if (arg.__bbox.complete) yield arg.__bbox.result;
+              else yield* analyze(arg.__bbox);
+            }
+          }
+        }
+      }
+      let hasThereBeenAGraphQlResponse = false;
+      for (const script of await page.locator('css=script[type="application/json"]').all()) {
+        const json = await script.textContent().then((json2) => json2 && JSON.parse(json2)).catch(() => {
+        });
+        const results = Array.from(analyze(json));
+        for (const result of results) {
+          await this.#handleGraphQlResponse(result);
+          hasThereBeenAGraphQlResponse = true;
+        }
+      }
+      if (!hasThereBeenAGraphQlResponse) {
+        throw new Error(
+          "[browser] No graphql responses received. Something is awry."
+        );
+      }
+      this.#log("[browser] Scrolling down posts...");
+      for (let i = 0; i < 10; i++) {
+        await page.keyboard.press("End");
+        await page.waitForRequest(
+          (request) => new URL(request.url()).pathname === "/graphql/query",
+          { timeout: 1e3 }
+        ).catch(
+          () => this.#log("[browser] no graphql query from pressing end key")
+        );
+        await page.waitForTimeout(500);
+        this.#log(`[browser] end key ${i + 1}`);
+      }
+      await page.keyboard.press("Home");
+      const storyScroller = page.locator(
+        'css=[data-pagelet="story_tray"] [role=presentation]'
+      );
+      await storyScroller.hover();
+      for (let i = 0; i < 10; i++) await page.mouse.wheel(1e3, 0);
+      await page.locator('css=[aria-label^="Story by"]').last().click();
+      this.#log("[browser] Reading stories from end...");
+      await page.waitForRequest(
+        (request) => new URL(request.url()).pathname === "/graphql/query"
+      );
+      this.#log("[browser] It seems the stories have opened.");
+      await page.waitForTimeout(1e3);
+      for (let i = 0; ; i++) {
+        if (i > 100) {
+          throw new Error("why am i on page 100");
+        }
+        await page.screenshot({
+          path: `data/screen-stories-${i}.png`
+          // fullPage: true
+        });
+        let story = page.locator('css=a[href^="/stories/"]');
+        story = story.first();
+        const atEnd = await story.evaluate((link) => {
+          return !!link.parentElement?.previousElementSibling?.querySelector(
+            '[aria-label="Menu"]'
+          );
+        });
+        if (atEnd) {
+          this.#log("[browser] We're done with stories! yay");
+          break;
+        }
+        await story.click();
+        await page.waitForRequest(
+          (request) => new URL(request.url()).pathname === "/graphql/query",
+          { timeout: 1e3 }
+        ).catch(
+          () => this.#log(
+            "[browser] no graphql query from paging down story, oh well"
+          )
+        );
+        await page.waitForTimeout(500);
+        this.#log(`[browser] story pagination ${i + 1}`);
+      }
+      await page.context().storageState({ path: "data/free-food-debug-auth.json" });
+    } catch (error) {
+      await page.screenshot({
+        path: "data/free-food-debug-screenshot.png",
+        fullPage: true
+      });
+      throw error;
+    } finally {
+      await context.close();
+      await browser.close();
+      this.#log("[browser] i close the browser");
+    }
+    onBrowserEnd?.();
+    await Promise.all(promises);
+    let total = 0;
+    for (const { username, stories } of this.#allUserStories) {
+      for (const { storyId, postId, imageUrl, timestamp } of stories) {
+        const sourceId = `story/${username}/${storyId}`;
+        const url = postId ? `https://www.instagram.com/p/${postId}/` : `https://www.instagram.com/stories/${username}/${storyId}/`;
+        total += await this.#insertIfNew(sourceId, url, [imageUrl], timestamp);
+      }
+    }
+    for (const { username, postId, caption, imageUrls, timestamp } of this.#allTimelinePosts) {
+      const sourceId = `post/${username}/${postId}`;
+      const url = `https://www.instagram.com/p/${postId}/`;
+      total += await this.#insertIfNew(
+        sourceId,
+        url,
+        imageUrls,
+        timestamp,
+        caption
+      );
+    }
+    this.#log("[insert] ok gamers we done");
+    return total;
+  }
+};
+function getNextTime() {
+  const date = /* @__PURE__ */ new Date();
+  date.setMinutes(Math.floor(Math.random() * 60));
+  if (date.getHours() >= 17) {
+    date.setDate(date.getDate() + 1);
+    date.setHours(date.getDay() === 0 ? 17 : 10);
+  } else if (date.getHours() < 10) {
+    date.setHours(10);
+  } else if (date.getDay() === 1 && date.getHours() < 12) {
+    date.setHours(12);
+  } else {
+    date.setHours(17);
+  }
+  return date;
+}
+var displayTime = (milliseconds) => {
+  const seconds = milliseconds / 1e3;
+  const min = Math.floor(seconds / 60);
+  return `${min}:${(seconds % 60).toFixed(3).padStart("00.000".length, "0")}`;
+};
+async function scrapeFreeFood(client2, nextTime) {
+  const start = performance.now();
+  const getFooter = () => `Took ${displayTime(
+    performance.now() - start
+  )}. Next: ${nextTime.toLocaleString("sv-SE")}`;
+  const scraper = new FreeFoodScraper();
+  try {
+    const added = await scraper.main();
+    await notify(client2, `${added} events added.`, {
+      footer: getFooter()
+    });
+  } catch (error) {
+    await notify(client2, `\`\`\`
+${scraper.logs.slice(-3e3)}
+\`\`\``, {
+      footer: getFooter()
+    });
+    await notify(client2, `\`\`\`
+${displayError(error)}
+\`\`\``, {
+      color: "error",
+      pingOwner: true,
+      file: await fs2.stat("data/free-food-debug-screenshot.png").then(() => "data/free-food-debug-screenshot.png").catch(() => void 0)
+    });
+  }
+}
+async function init(client2) {
+  let nextTime = getNextTime();
+  setInterval(() => {
+    if (Date.now() >= nextTime.getTime()) {
+      nextTime = getNextTime();
+      scrapeFreeFood(client2, nextTime);
+    }
+  }, 60 * 1e3);
+  await notify(
+    client2,
+    `The first scrape will be <t:${Math.floor(nextTime.getTime() / 1e3)}>.`
+  );
+}
+async function debugScraper(message) {
+  if (message.author.id !== process.env.OWNER) {
+    await message.reply("fuck off");
+    return;
+  }
+  await message.react("\u{1F440}");
+  const start = performance.now();
+  const getFooter = () => `${displayTime(performance.now() - start)} elasped`;
+  const scraper = new FreeFoodScraper();
+  try {
+    const added = await scraper.main(async () => {
+      await message.reply({
+        allowedMentions: { repliedUser: false },
+        embeds: [
+          {
+            description: `Browser has closed.`,
+            footer: { text: getFooter() }
+          }
+        ]
+      });
+    });
+    await message.reply({
+      embeds: [
+        {
+          description: `${added} events added.`,
+          footer: { text: getFooter() }
+        }
+      ]
+    });
+  } catch (error) {
+    await message.reply({
+      embeds: [
+        {
+          description: `\`\`\`
+${scraper.logs.slice(-3e3)}
+\`\`\``,
+          footer: { text: getFooter() }
+        }
+      ]
+    });
+    await message.reply({
+      embeds: [
+        {
+          description: `\`\`\`
+${displayError(error)}
+\`\`\``,
+          color: 16711680
+        }
+      ]
+    });
+  }
+}
+
+// src/commands/mentions.ts
+var mentions_exports = {};
+__export(mentions_exports, {
+  onMessage: () => onMessage2,
+  onReady: () => onReady2,
+  whoPinged: () => whoPinged,
+  whoPingedMe: () => whoPingedMe
+});
+var mentionCache = new CachedMap("./data/mentions.json");
+var onReady2 = mentionCache.read;
+async function onMessage2(message) {
+  const {
+    channel: { id: channelId },
+    mentions
+  } = message;
+  if (mentions.everyone || mentions.roles.size > 0 || mentions.users.size > 0) {
+    const msg = {
+      author: message.author.id,
+      content: message.content,
+      url: message.url
+    };
+    if (mentions.everyone) {
+      mentionCache.set(`${channelId}-everyone`, msg);
+    }
+    for (const roleId of mentions.roles.keys()) {
+      mentionCache.set(`${channelId}-${roleId}`, { ...msg, role: true });
+    }
+    if (message.author.id !== message.client.user.id) {
+      for (const userId of mentions.users.keys()) {
+        mentionCache.set(`${channelId}-${userId}`, msg);
+      }
+    }
+    mentionCache.save();
+  }
+}
+async function whoPinged(message, args) {
+  const [targetId, channelId = message.channel.id] = args.length < 2 && message.content.includes("everyone") ? ["everyone", args[0]] : args;
+  const lastMention = mentionCache.get(`${channelId}-${targetId}`);
+  const them = targetId === "everyone" ? "everyone" : targetId === message.author.id ? "you" : "them";
+  if (lastMention) {
+    await message.reply({
+      embeds: [
+        {
+          // This breaks if a Nitro user repeats ]( 2000 times in a message,
+          // whatever
+          description: `<@${lastMention.author}> pinged ${targetId === "everyone" ? "@everyone" : `<@${lastMention.role ? "&" : ""}${targetId}>`} ([link to message](${lastMention.url})):
+
+${lastMention.content.replace(/]\(/g, "]\uFEFF(")}`,
+          footer: {
+            text: !lastMention.role && targetId !== "everyone" ? "this only shows direct pings to the user, btw, it doesn't factor in role and everyone pings" : ""
+          }
+        }
+      ],
+      allowedMentions: {
+        repliedUser: false
+      }
+    });
+  } else {
+    await message.reply({
+      content: select([
+        "hmm if someone did ping $them $here then i wasn't paying attention",
+        "whoever pinged must have pinged $them before i started tracking pings $here",
+        "i dont recall $them being pinged $here, maybe i was offline or smth"
+      ]).replace("$them", them).replace(
+        "$here",
+        channelId === message.channel.id ? "here" : "there"
+      ) + (channelId === message.channel.id ? ` (note: if the ping was in a different channel then reply \`who pinged ${targetId} in <channel>\`)` : ""),
+      allowedMentions: {
+        repliedUser: false
+      }
+    });
+  }
+}
+async function whoPingedMe(message, [channelId = message.channel.id]) {
+  const userMention = mentionCache.get(`${channelId}-${message.author.id}`);
+  const possibilities = [mentionCache.get(`${channelId}-everyone`), userMention];
+  if (message.member) {
+    for (const roleId of message.member.roles.cache.keys()) {
+      possibilities.push(mentionCache.get(`${channelId}-${roleId}`));
+    }
+  }
+  const lastMention = possibilities.reduce(
+    (acc, curr) => (
+      // Using message ID (from URL) to get latest ping. Snowflakes' most
+      // significant digits encode the time, so imprecision due to casting a
+      // u64 to a f64 should be negligible.
+      !acc || curr && +acc.url.split("/").slice(-1)[0] < +curr.url.split("/").slice(-1)[0] ? curr : acc
+    ),
+    void 0
+  );
+  if (lastMention) {
+    await message.reply({
+      embeds: [
+        {
+          description: `<@${lastMention.author}> [pinged you](${lastMention.url}):
+
+${lastMention.content.replace(/]\(/g, "]\uFEFF(")}`,
+          footer: {
+            text: lastMention === userMention ? "" : `tip: reply \`who pinged ${message.author.id} in ${channelId}\` to filter out role and everyone pings`
+          }
+        }
+      ],
+      allowedMentions: {
+        repliedUser: false
+      }
+    });
+  } else {
+    await message.reply({
+      content: select([
+        "i don't remember you getting pinged, maybe i wasn't paying attention",
+        "hm you might've been pinged while i was offline",
+        "your ping is not in my records, maybe i wasn't tracking pings then"
+      ]) + (channelId === message.channel.id ? " (note: if you were pinged in a different channel then reply `who pinged me in <channel>`)" : ""),
+      allowedMentions: {
+        repliedUser: false
+      }
+    });
+  }
+}
+
+// src/commands/minecraft.ts
+var minecraft_exports = {};
+__export(minecraft_exports, {
+  init: () => init2,
+  onReady: () => onReady3,
+  serverStatus: () => serverStatus,
+  track: () => track
+});
+import { Client, PacketWriter, State } from "mcproto";
+var DEFAULT_PORT = "25565";
+var EXPIRATION_TIME = 1e3 * 60 * 60 * 24 * 7;
+var CHECK_FREQ = 1e3 * 60 * 5;
+async function getServerStatus(host, port) {
+  const client2 = await Client.connect(host, port);
+  client2.send(
+    new PacketWriter(0).writeVarInt(404).writeString(host).writeUInt16(port).writeVarInt(State.Status)
+  );
+  client2.send(new PacketWriter(0));
+  const response = await client2.nextPacket(0);
+  const {
+    players: { max, online, sample: players = [] },
+    version: { name: version }
+  } = response.readJSON();
+  client2.end();
+  return { online, max, players, version };
+}
+async function serverStatus(message, [address]) {
+  if (!address) {
+    const info = trackChannels.get(message.channel.id);
+    if (!info) {
+      await message.reply({
+        content: "idk what address u want. i default to whatever you set `track:` to but it looks like you arent using that so \u{1F937}"
+      });
+      return;
+    }
+    address = `${info.host}:${info.port}`;
+  }
+  try {
+    const [host, port = DEFAULT_PORT] = address.split(":");
+    const { online, max, players, version } = await getServerStatus(host, +port);
+    await message.reply({
+      content: select([
+        "fomo time?",
+        "let's see who's gaming",
+        "tbh i expected more people on"
+      ]),
+      embeds: [
+        {
+          title: select([
+            `${online}/${max} online`,
+            `${online}/${max} gaming rn`,
+            `${online}/${max} not touching grass`
+          ]),
+          description: online > 0 ? players.map(
+            ({ name, id }) => `[${name}](https://namemc.com/profile/${id})`
+          ).join("\n") || select([
+            "server not showing who's on",
+            "no players provided",
+            "the servers hiding something..."
+          ]) : select([
+            "no one's on :(",
+            "dead server",
+            "everyone touching grass today"
+          ]),
+          footer: {
+            text: version
+          }
+        }
+      ]
+    });
+  } catch (error) {
+    await message.reply({
+      content: select(["problem!", "can't connect!", "oopsie doopsie"]),
+      embeds: [
+        {
+          color: 15286850,
+          description: error instanceof Error ? error.message : String(error)
+        }
+      ]
+    });
+  }
+}
+function createEmbed(suffix = "", color) {
+  return ({ id, name }) => ({
+    author: {
+      name: name + suffix,
+      icon_url: `https://cravatar.eu/helmavatar/${id}/64.png`
+    },
+    color
+  });
+}
+async function check(channel, info, state, start = false) {
+  if (Date.now() > info.start + EXPIRATION_TIME) {
+    clearInterval(state.timeoutId);
+    trackChannels.delete(channel.id).save();
+    delete states[channel.id];
+    await channel.send({
+      content: `It has now been <t:${Math.floor(
+        info.start / 1e3
+      )}:R> when you asked me to start tracking your server. In case you've stopped playing, I'm going to stop tracking the server now.`,
+      embeds: [
+        {
+          description: `If you would like to continue tracking, reply to this message with \`track: ${info.host}:${info.port}\``
+        }
+      ]
+    });
+    return;
+  }
+  const { online, max, players } = await getServerStatus(
+    info.host,
+    info.port
+  ).catch(
+    () => ({
+      online: 0,
+      max: -1,
+      players: [],
+      version: ""
+    })
+  );
+  const embeds = start ? players.map(createEmbed(" was already on.")) : [
+    // Joined
+    ...players.filter(({ id }) => !state.lastPlayers.some((p) => p.id === id)).map(createEmbed(" joined the game.", 2278750)),
+    // Left
+    ...state.lastPlayers?.filter(({ id }) => !players.some((p) => p.id === id)).map(createEmbed(" left the game.", 15680580))
+  ];
+  if (start || embeds.length > 0) {
+    await channel.send({
+      content: `${online}/${Math.max(
+        max,
+        0
+      )} players are on now. I check again <t:${Math.floor(
+        (Date.now() + CHECK_FREQ) / 1e3
+      )}:R>.${max === -1 ? " **NOTE: Server is offline.**" : ""}`,
+      embeds
+    });
+  }
+  state.lastPlayers = players;
+}
+var trackChannels = new CachedMap("./data/minecraft-track.json");
+var onReady3 = trackChannels.read;
+var states = {};
+async function init2(client2) {
+  await Promise.all(
+    trackChannels.entries().map(async ([channelId, info]) => {
+      const channel = await client2.channels.fetch(channelId);
+      if (channel?.isTextBased()) {
+        states[channelId] = {
+          lastPlayers: [],
+          timeoutId: setInterval(() => {
+            check(channel, info, states[channelId]);
+          }, CHECK_FREQ)
+        };
+        await check(channel, info, states[channelId], true);
+      }
+    })
+  );
+}
+async function track(message, [address]) {
+  if (states[message.channel.id]) {
+    clearInterval(states[message.channel.id].timeoutId);
+  }
+  if (address) {
+    const [host, port = DEFAULT_PORT] = address.split(":");
+    const state = {
+      lastPlayers: [],
+      timeoutId: setInterval(() => {
+        check(message.channel, info, state);
+      }, CHECK_FREQ)
+    };
+    const info = {
+      host,
+      port: +port,
+      start: Date.now()
+    };
+    trackChannels.set(message.channel.id, info).save();
+    states[message.channel.id] = state;
+    await check(message.channel, info, state, true);
+  } else {
+    const info = trackChannels.get(message.channel.id);
+    await message.reply(
+      info ? "ok i will stop tracking" : "i don't think i was tracking a server. put the server url after the colon, like `track: yourmom.com`"
+    );
+    trackChannels.delete(message.channel.id).save();
+  }
+}
+
+// src/commands/poll-reactions.ts
+var poll_reactions_exports = {};
+__export(poll_reactions_exports, {
+  getReactions: () => getReactions,
+  notPollChannel: () => notPollChannel,
+  onReady: () => onReady4,
+  pollChannel: () => pollChannel
+});
+import {
+  DMChannel,
+  PermissionFlagsBits
+} from "discord.js";
 
 // src/utils/emoji.json
 var emoji_default = [
@@ -3882,14 +4887,9 @@ var emojiRegex = new RegExp(
 // src/utils/ok.ts
 var ok_default = ["\u{1F44C}", "\u{1F197}", "\u{1F44D}", "\u2705"];
 
-// src/utils/select.ts
-function select(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}
-
 // src/commands/poll-reactions.ts
 var pollChannels = new CachedMap("./data/poll-reactions.json");
-var onReady = pollChannels.read;
+var onReady4 = pollChannels.read;
 function isPollChannel(message) {
   return pollChannels.get(message.channel.id, false);
 }
@@ -3953,6 +4953,68 @@ function getReactions(message, isNew) {
     }
   } else {
     return null;
+  }
+}
+
+// src/commands/reaction-roles.ts
+var reaction_roles_exports = {};
+__export(reaction_roles_exports, {
+  getReactions: () => getReactions2,
+  onReact: () => onReact2
+});
+import {
+  PermissionFlagsBits as PermissionFlagsBits2
+} from "discord.js";
+async function isMenu(message) {
+  if (!message.guild || !message.content.includes("(select roles)")) {
+    return false;
+  }
+  return message.guild.members.fetch(message.author).then((member) => member.permissions.has(PermissionFlagsBits2.ManageRoles)).catch(() => false);
+}
+var roleMentionRegex = /<@&(\d+)>/;
+function parseMenu(content) {
+  const roles = {};
+  for (const line of content.split("\n")) {
+    const roleId = line.match(roleMentionRegex);
+    if (!roleId) {
+      continue;
+    }
+    for (const [unicode, customId] of line.matchAll(emojiRegex)) {
+      roles[customId ?? unicode] = roleId[1];
+    }
+  }
+  return roles;
+}
+async function getReactions2(message) {
+  if (await isMenu(message)) {
+    return Object.keys(parseMenu(message.content));
+  } else {
+    return null;
+  }
+}
+async function onReact2(reaction, user, added) {
+  const message = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
+  if (!message.guild || !await isMenu(message)) {
+    return;
+  }
+  const menuAuthor = await message.guild.members.fetch(message.author).catch(() => null);
+  if (!menuAuthor?.permissions.has(PermissionFlagsBits2.ManageRoles)) {
+    return;
+  }
+  const roles = parseMenu(message.content);
+  const emoji = reaction.emoji.id ?? reaction.emoji.name;
+  console.log(roles, emoji);
+  if (emoji && roles[emoji]) {
+    try {
+      const member = await message.guild.members.fetch(user.id);
+      if (added) {
+        await member.roles.add(roles[emoji]);
+      } else {
+        await member.roles.remove(roles[emoji]);
+      }
+    } catch {
+      return;
+    }
   }
 }
 
@@ -4052,647 +5114,12 @@ async function getDate(message, [id = message.author.id]) {
   );
 }
 
-// src/commands/welcome.ts
-var welcome_exports = {};
-__export(welcome_exports, {
-  onJoin: () => onJoin,
-  onMessage: () => onMessage,
-  onReady: () => onReady2,
-  setWelcome: () => setWelcome
-});
-import {
-  DMChannel as DMChannel2,
-  PermissionFlagsBits as PermissionFlagsBits2,
-  TextChannel
-} from "discord.js";
-var welcomeChannels = new CachedMap(
-  "./data/welcome-channels.json"
-);
-var sentienceMsgSent = new CachedMap(
-  "./data/sentience-msg-sent.json"
-);
-var onReady2 = () => Promise.all([welcomeChannels.read(), sentienceMsgSent.read()]);
-async function setWelcome(message, [channelId, welcomeMsg]) {
-  if (message.channel instanceof DMChannel2 || message.channel.lastMessageId === void 0) {
-    await message.reply("no dms");
-    return;
-  }
-  if (!message.channel.permissionsFor(message.member).has(PermissionFlagsBits2.ManageGuild)) {
-    await message.reply(
-      "why should i obey you if you cant even manage the server lmao"
-    );
-    return;
-  }
-  welcomeChannels.set(message.guild.id, { channelId, message: welcomeMsg }).save();
-  await message.react(select(ok_default));
-}
-async function onJoin(member) {
-  const { channelId, message } = welcomeChannels.get(member.guild.id) ?? {};
-  if (!channelId) return;
-  const channel = member.guild.channels.cache.get(channelId);
-  if (!(channel instanceof TextChannel)) return;
-  await channel.send({
-    content: select([
-      "Hi, {USER}; please read this:",
-      "Welcome, {USER}! Read this:",
-      "Hey, {USER}! Let's see if you can read.",
-      "{USER}, I have been told to show you this."
-    ]).replace("{USER}", member.toString()),
-    embeds: [
-      {
-        description: message,
-        footer: {
-          text: "Note: I am just a bot, and I have been instructed to repeat this message to all users who join the server."
-        }
-      }
-    ]
-  });
-}
-async function onMessage(message) {
-  if (!message.guild) return;
-  const { channelId } = welcomeChannels.get(message.guild.id) ?? {};
-  if (message.channel.id === channelId && !message.author.bot) {
-    if (!sentienceMsgSent.get(`${message.guild.id}-${message.author.id}`)) {
-      await message.reply({
-        content: message.content.length > 15 ? select([
-          "Thanks! You'll be verified... eventually. Bureaucracy is slow.",
-          "This message might be enough proof that you're sentient. You can send more if you want, just in case. I'm just a bot.",
-          "Cool! I'm just a bot, so I can't tell if this means you're sentient. We'll have to wait and see."
-        ]) : select([
-          "That's a bit short of a message. Try sending more to prove that you're not a bot, and you'll be verified eventually.",
-          "Say more. Couldn't a bot have said that as well? Once you're prove you're human you'll eventually be verified.",
-          "The more you write, the better. Show me your definitely human imagination! If your messages are satisfactorily humanlike, you will eventually get verified."
-        ]),
-        allowedMentions: {
-          repliedUser: false
-        }
-      });
-      sentienceMsgSent.set(`${message.guild.id}-${message.author.id}`, true).save();
-    }
-  }
-}
-
-// src/commands/vote-lockdown.ts
-var vote_lockdown_exports = {};
-__export(vote_lockdown_exports, {
-  onReady: () => onReady3,
-  setLockdownCategory: () => setLockdownCategory,
-  voteLockdown: () => voteLockdown
-});
-import {
-  CategoryChannel,
-  DMChannel as DMChannel3,
-  PermissionFlagsBits as PermissionFlagsBits3
-} from "discord.js";
-var lockdownCategories = new CachedMap("./data/lockdown-cats.json");
-var lockdownVotes = new CachedMap("./data/lockdown-votes.json");
-var onReady3 = () => Promise.all([lockdownCategories.read(), lockdownVotes.read()]);
-async function setLockdownCategory(message, [categoryId]) {
-  if (message.channel instanceof DMChannel3 || message.channel.lastMessageId === void 0) {
-    await message.reply("no dms");
-    return;
-  }
-  if (!message.channel.permissionsFor(message.member).has(PermissionFlagsBits3.ManageChannels)) {
-    await message.reply(
-      "lol first show me that you can manage chanenls then we talk"
-    );
-    return;
-  }
-  lockdownCategories.set(message.guild.id, categoryId).save();
-  await message.react(select(ok_default));
-}
-var MIN_VOTES = 3;
-var VOTE_PERIOD = 10 * 60 * 1e3;
-async function voteLockdown(message) {
-  const categoryId = lockdownCategories.get(message.guild?.id);
-  const category = message.guild.channels.cache.get(categoryId);
-  if (!(category instanceof CategoryChannel)) {
-    await message.reply("server doesn't have category set to lock down");
-    return;
-  }
-  const votes = lockdownVotes.get(message.guild?.id, []);
-  const now = Date.now();
-  for (let i = 0; i < votes.length; i++) {
-    if (now - votes[i].time > VOTE_PERIOD) {
-      votes.splice(i--, 1);
-    }
-  }
-  if (votes.find((vote) => vote.user === message.author.id)) {
-    lockdownVotes.save();
-    await message.reply("tsk tsk, you've already voted in the past 10 min");
-    return;
-  } else {
-    if (votes.length === 0) {
-      lockdownVotes.set(message.guild.id, votes);
-    }
-    votes.push({ time: now, user: message.author.id });
-    lockdownVotes.save();
-  }
-  if (votes.length >= MIN_VOTES) {
-    const success = await category.permissionOverwrites.resolve(message.guild.roles.everyone.id).edit({ ViewChannel: null }, "Democracy voted to lock the channel.").then(() => true).catch(() => false);
-    await message.channel.send(
-      success ? "unverified folk have been BANISHED from the common people's channels" : "unfortunately i lack the perms to change channel perms oopsi"
-    );
-  } else {
-    await message.reply(
-      `${votes.length} of the minimum ${MIN_VOTES} votes needed to close off the server from them pesky unverifieds`
-    );
-  }
-}
-
-// src/commands/mentions.ts
-var mentions_exports = {};
-__export(mentions_exports, {
-  onMessage: () => onMessage2,
-  onReady: () => onReady4,
-  whoPinged: () => whoPinged,
-  whoPingedMe: () => whoPingedMe
-});
-var mentionCache = new CachedMap("./data/mentions.json");
-var onReady4 = mentionCache.read;
-async function onMessage2(message) {
-  const {
-    channel: { id: channelId },
-    mentions
-  } = message;
-  if (mentions.everyone || mentions.roles.size > 0 || mentions.users.size > 0) {
-    const msg = {
-      author: message.author.id,
-      content: message.content,
-      url: message.url
-    };
-    if (mentions.everyone) {
-      mentionCache.set(`${channelId}-everyone`, msg);
-    }
-    for (const roleId of mentions.roles.keys()) {
-      mentionCache.set(`${channelId}-${roleId}`, { ...msg, role: true });
-    }
-    if (message.author.id !== message.client.user.id) {
-      for (const userId of mentions.users.keys()) {
-        mentionCache.set(`${channelId}-${userId}`, msg);
-      }
-    }
-    mentionCache.save();
-  }
-}
-async function whoPinged(message, args) {
-  const [targetId, channelId = message.channel.id] = args.length < 2 && message.content.includes("everyone") ? ["everyone", args[0]] : args;
-  const lastMention = mentionCache.get(`${channelId}-${targetId}`);
-  const them = targetId === "everyone" ? "everyone" : targetId === message.author.id ? "you" : "them";
-  if (lastMention) {
-    await message.reply({
-      embeds: [
-        {
-          // This breaks if a Nitro user repeats ]( 2000 times in a message,
-          // whatever
-          description: `<@${lastMention.author}> pinged ${targetId === "everyone" ? "@everyone" : `<@${lastMention.role ? "&" : ""}${targetId}>`} ([link to message](${lastMention.url})):
-
-${lastMention.content.replace(/]\(/g, "]\uFEFF(")}`,
-          footer: {
-            text: !lastMention.role && targetId !== "everyone" ? "this only shows direct pings to the user, btw, it doesn't factor in role and everyone pings" : ""
-          }
-        }
-      ],
-      allowedMentions: {
-        repliedUser: false
-      }
-    });
-  } else {
-    await message.reply({
-      content: select([
-        "hmm if someone did ping $them $here then i wasn't paying attention",
-        "whoever pinged must have pinged $them before i started tracking pings $here",
-        "i dont recall $them being pinged $here, maybe i was offline or smth"
-      ]).replace("$them", them).replace(
-        "$here",
-        channelId === message.channel.id ? "here" : "there"
-      ) + (channelId === message.channel.id ? ` (note: if the ping was in a different channel then reply \`who pinged ${targetId} in <channel>\`)` : ""),
-      allowedMentions: {
-        repliedUser: false
-      }
-    });
-  }
-}
-async function whoPingedMe(message, [channelId = message.channel.id]) {
-  const userMention = mentionCache.get(`${channelId}-${message.author.id}`);
-  const possibilities = [mentionCache.get(`${channelId}-everyone`), userMention];
-  if (message.member) {
-    for (const roleId of message.member.roles.cache.keys()) {
-      possibilities.push(mentionCache.get(`${channelId}-${roleId}`));
-    }
-  }
-  const lastMention = possibilities.reduce(
-    (acc, curr) => (
-      // Using message ID (from URL) to get latest ping. Snowflakes' most
-      // significant digits encode the time, so imprecision due to casting a
-      // u64 to a f64 should be negligible.
-      !acc || curr && +acc.url.split("/").slice(-1)[0] < +curr.url.split("/").slice(-1)[0] ? curr : acc
-    ),
-    void 0
-  );
-  if (lastMention) {
-    await message.reply({
-      embeds: [
-        {
-          description: `<@${lastMention.author}> [pinged you](${lastMention.url}):
-
-${lastMention.content.replace(/]\(/g, "]\uFEFF(")}`,
-          footer: {
-            text: lastMention === userMention ? "" : `tip: reply \`who pinged ${message.author.id} in ${channelId}\` to filter out role and everyone pings`
-          }
-        }
-      ],
-      allowedMentions: {
-        repliedUser: false
-      }
-    });
-  } else {
-    await message.reply({
-      content: select([
-        "i don't remember you getting pinged, maybe i wasn't paying attention",
-        "hm you might've been pinged while i was offline",
-        "your ping is not in my records, maybe i wasn't tracking pings then"
-      ]) + (channelId === message.channel.id ? " (note: if you were pinged in a different channel then reply `who pinged me in <channel>`)" : ""),
-      allowedMentions: {
-        repliedUser: false
-      }
-    });
-  }
-}
-
-// src/commands/avatar.ts
-var avatar_exports = {};
-__export(avatar_exports, {
-  avatar: () => avatar,
-  warm: () => warm
-});
-async function avatar(message, [userId = message.author.id]) {
-  const user = await message.client.users.fetch(userId).catch(() => null);
-  if (user) {
-    await message.reply({
-      content: select([
-        "too blue for my tastes",
-        "why does it look so bad up close",
-        "i regret having eyes"
-      ]),
-      embeds: [
-        {
-          image: {
-            url: user.displayAvatarURL({ extension: "png", size: 4096 })
-          }
-        }
-      ]
-    });
-  } else {
-    await message.reply({
-      embeds: [
-        {
-          description: select([
-            `no idea who <@${userId}> is`,
-            `<@${userId}>? dont know em`,
-            `stop making up people!! <@${userId}> is about as real as the grass you touched this morning: it doesn't exist`
-          ])
-        }
-      ]
-    });
-  }
-}
-async function warm(message, [userId]) {
-  const user = await message.client.users.fetch(userId).catch(() => null);
-  if (user) {
-    user.send(
-      `You were warmed in [${message.guild?.name ?? "DMs"}](${message.url}). Reason: <@${message.author.id}> thought you needed warmth. \u{1F970}`
-    ).catch(() => {
-    });
-    await message.reply({
-      embeds: [
-        { color: 16612098, description: `\u{1F970} <@${userId}> has been warmed.` }
-      ]
-    });
-  } else {
-    await message.reply({
-      embeds: [
-        { color: 15286850, description: `\u{1F614} Couldn't warm <@${userId}>.` }
-      ]
-    });
-  }
-}
-
-// src/commands/minecraft.ts
-var minecraft_exports = {};
-__export(minecraft_exports, {
-  init: () => init,
-  onReady: () => onReady5,
-  serverStatus: () => serverStatus,
-  track: () => track
-});
-import { Client, PacketWriter, State } from "mcproto";
-var DEFAULT_PORT = "25565";
-var EXPIRATION_TIME = 1e3 * 60 * 60 * 24 * 7;
-var CHECK_FREQ = 1e3 * 60 * 5;
-async function getServerStatus(host, port) {
-  const client2 = await Client.connect(host, port);
-  client2.send(
-    new PacketWriter(0).writeVarInt(404).writeString(host).writeUInt16(port).writeVarInt(State.Status)
-  );
-  client2.send(new PacketWriter(0));
-  const response = await client2.nextPacket(0);
-  const {
-    players: { max, online, sample: players = [] },
-    version: { name: version }
-  } = response.readJSON();
-  client2.end();
-  return { online, max, players, version };
-}
-async function serverStatus(message, [address]) {
-  if (!address) {
-    const info = trackChannels.get(message.channel.id);
-    if (!info) {
-      await message.reply({
-        content: "idk what address u want. i default to whatever you set `track:` to but it looks like you arent using that so \u{1F937}"
-      });
-      return;
-    }
-    address = `${info.host}:${info.port}`;
-  }
-  try {
-    const [host, port = DEFAULT_PORT] = address.split(":");
-    const { online, max, players, version } = await getServerStatus(host, +port);
-    await message.reply({
-      content: select([
-        "fomo time?",
-        "let's see who's gaming",
-        "tbh i expected more people on"
-      ]),
-      embeds: [
-        {
-          title: select([
-            `${online}/${max} online`,
-            `${online}/${max} gaming rn`,
-            `${online}/${max} not touching grass`
-          ]),
-          description: online > 0 ? players.map(
-            ({ name, id }) => `[${name}](https://namemc.com/profile/${id})`
-          ).join("\n") || select([
-            "server not showing who's on",
-            "no players provided",
-            "the servers hiding something..."
-          ]) : select([
-            "no one's on :(",
-            "dead server",
-            "everyone touching grass today"
-          ]),
-          footer: {
-            text: version
-          }
-        }
-      ]
-    });
-  } catch (error) {
-    await message.reply({
-      content: select(["problem!", "can't connect!", "oopsie doopsie"]),
-      embeds: [
-        {
-          color: 15286850,
-          description: error instanceof Error ? error.message : String(error)
-        }
-      ]
-    });
-  }
-}
-function createEmbed(suffix = "", color) {
-  return ({ id, name }) => ({
-    author: {
-      name: name + suffix,
-      icon_url: `https://cravatar.eu/helmavatar/${id}/64.png`
-    },
-    color
-  });
-}
-async function check(channel, info, state, start = false) {
-  if (Date.now() > info.start + EXPIRATION_TIME) {
-    clearInterval(state.timeoutId);
-    trackChannels.delete(channel.id).save();
-    delete states[channel.id];
-    await channel.send({
-      content: `It has now been <t:${Math.floor(
-        info.start / 1e3
-      )}:R> when you asked me to start tracking your server. In case you've stopped playing, I'm going to stop tracking the server now.`,
-      embeds: [
-        {
-          description: `If you would like to continue tracking, reply to this message with \`track: ${info.host}:${info.port}\``
-        }
-      ]
-    });
-    return;
-  }
-  const { online, max, players } = await getServerStatus(
-    info.host,
-    info.port
-  ).catch(
-    () => ({
-      online: 0,
-      max: -1,
-      players: [],
-      version: ""
-    })
-  );
-  const embeds = start ? players.map(createEmbed(" was already on.")) : [
-    // Joined
-    ...players.filter(({ id }) => !state.lastPlayers.some((p) => p.id === id)).map(createEmbed(" joined the game.", 2278750)),
-    // Left
-    ...state.lastPlayers?.filter(({ id }) => !players.some((p) => p.id === id)).map(createEmbed(" left the game.", 15680580))
-  ];
-  if (start || embeds.length > 0) {
-    await channel.send({
-      content: `${online}/${Math.max(
-        max,
-        0
-      )} players are on now. I check again <t:${Math.floor(
-        (Date.now() + CHECK_FREQ) / 1e3
-      )}:R>.${max === -1 ? " **NOTE: Server is offline.**" : ""}`,
-      embeds
-    });
-  }
-  state.lastPlayers = players;
-}
-var trackChannels = new CachedMap("./data/minecraft-track.json");
-var onReady5 = trackChannels.read;
-var states = {};
-async function init(client2) {
-  await Promise.all(
-    trackChannels.entries().map(async ([channelId, info]) => {
-      const channel = await client2.channels.fetch(channelId);
-      if (channel?.isTextBased()) {
-        states[channelId] = {
-          lastPlayers: [],
-          timeoutId: setInterval(() => {
-            check(channel, info, states[channelId]);
-          }, CHECK_FREQ)
-        };
-        await check(channel, info, states[channelId], true);
-      }
-    })
-  );
-}
-async function track(message, [address]) {
-  if (states[message.channel.id]) {
-    clearInterval(states[message.channel.id].timeoutId);
-  }
-  if (address) {
-    const [host, port = DEFAULT_PORT] = address.split(":");
-    const state = {
-      lastPlayers: [],
-      timeoutId: setInterval(() => {
-        check(message.channel, info, state);
-      }, CHECK_FREQ)
-    };
-    const info = {
-      host,
-      port: +port,
-      start: Date.now()
-    };
-    trackChannels.set(message.channel.id, info).save();
-    states[message.channel.id] = state;
-    await check(message.channel, info, state, true);
-  } else {
-    const info = trackChannels.get(message.channel.id);
-    await message.reply(
-      info ? "ok i will stop tracking" : "i don't think i was tracking a server. put the server url after the colon, like `track: yourmom.com`"
-    );
-    trackChannels.delete(message.channel.id).save();
-  }
-}
-
-// src/commands/emoji-usage.ts
-var emoji_usage_exports = {};
-__export(emoji_usage_exports, {
-  getUsage: () => getUsage,
-  onMessage: () => onMessage3,
-  onReact: () => onReact,
-  onReady: () => onReady6
-});
-import {
-  GuildEmoji
-} from "discord.js";
-var customEmojiRegex = /<a?:\w+:(\d+)>/g;
-var emojiUsage = new CachedMap("./data/emoji-usage.json");
-var onReady6 = emojiUsage.read;
-async function getUsage(message) {
-  if (!message.guild) {
-    await message.reply("i dont track emojis in dms sry");
-    return;
-  }
-  await message.reply({
-    embeds: [
-      {
-        description: Array.from(
-          // Force fetch in case emoji changed
-          await message.guild.emojis.fetch(void 0, { force: true }),
-          ([emojiId, { animated }]) => ({
-            emoji: `<${animated ? "a" : ""}:w:${emojiId}>`,
-            count: emojiUsage.get(`${message.guildId}-${emojiId}`, 0)
-          })
-        ).sort((a, b) => b.count - a.count).map(({ emoji, count }) => `${emoji} ${count}`).join("\n")
-      }
-    ]
-  });
-}
-async function onMessage3(message) {
-  if (!message.guildId) {
-    return;
-  }
-  const emojis = new Set(
-    Array.from(
-      message.content.matchAll(customEmojiRegex),
-      ([, emojiId]) => emojiId
-    )
-  );
-  for (const emojiId of emojis) {
-    const id = `${message.guildId}-${emojiId}`;
-    emojiUsage.set(id, emojiUsage.get(id, 0) + 1);
-  }
-  emojiUsage.save();
-}
-async function onReact(reaction) {
-  if (reaction.partial) {
-    reaction = await reaction.fetch();
-  }
-  if (reaction.count === 1 && !(reaction.emoji instanceof GuildEmoji && reaction.emoji.guild.id !== reaction.message.guildId)) {
-    const id = `${reaction.message.guildId}-${reaction.emoji.id}`;
-    emojiUsage.set(id, emojiUsage.get(id, 0) + 1);
-  }
-  emojiUsage.save();
-}
-
-// src/commands/reaction-roles.ts
-var reaction_roles_exports = {};
-__export(reaction_roles_exports, {
-  getReactions: () => getReactions2,
-  onReact: () => onReact2
-});
-import {
-  PermissionFlagsBits as PermissionFlagsBits4
-} from "discord.js";
-async function isMenu(message) {
-  if (!message.guild || !message.content.includes("(select roles)")) {
-    return false;
-  }
-  return message.guild.members.fetch(message.author).then((member) => member.permissions.has(PermissionFlagsBits4.ManageRoles)).catch(() => false);
-}
-var roleMentionRegex = /<@&(\d+)>/;
-function parseMenu(content) {
-  const roles = {};
-  for (const line of content.split("\n")) {
-    const roleId = line.match(roleMentionRegex);
-    if (!roleId) {
-      continue;
-    }
-    for (const [unicode, customId] of line.matchAll(emojiRegex)) {
-      roles[customId ?? unicode] = roleId[1];
-    }
-  }
-  return roles;
-}
-async function getReactions2(message) {
-  if (await isMenu(message)) {
-    return Object.keys(parseMenu(message.content));
-  } else {
-    return null;
-  }
-}
-async function onReact2(reaction, user, added) {
-  const message = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
-  if (!message.guild || !await isMenu(message)) {
-    return;
-  }
-  const menuAuthor = await message.guild.members.fetch(message.author).catch(() => null);
-  if (!menuAuthor?.permissions.has(PermissionFlagsBits4.ManageRoles)) {
-    return;
-  }
-  const roles = parseMenu(message.content);
-  const emoji = reaction.emoji.id ?? reaction.emoji.name;
-  console.log(roles, emoji);
-  if (emoji && roles[emoji]) {
-    try {
-      const member = await message.guild.members.fetch(user.id);
-      if (added) {
-        await member.roles.add(roles[emoji]);
-      } else {
-        await member.roles.remove(roles[emoji]);
-      }
-    } catch {
-      return;
-    }
-  }
-}
-
 // src/commands/ucpd.ts
 var ucpd_exports = {};
 __export(ucpd_exports, {
   getReports: () => getReports,
-  init: () => init2,
-  onReady: () => onReady7,
+  init: () => init3,
+  onReady: () => onReady5,
   showReport: () => showReport,
   track: () => track2,
   untrack: () => untrack
@@ -4908,9 +5335,9 @@ ${fileNames?.join("\n") ?? "(failed to load)"}`
 }
 var trackChannels2 = new CachedMap("./data/ucpd-track.json");
 var seen = new CachedMap("./data/ucpd-seen.json");
-var onReady7 = () => Promise.all([trackChannels2.read(), seen.read()]);
+var onReady5 = () => Promise.all([trackChannels2.read(), seen.read()]);
 var CHECK_FREQ2 = 2.13 * 60 * 60 * 1e3;
-function init2(client2) {
+function init3(client2) {
   setInterval(async () => {
     const channels = trackChannels2.entries();
     if (channels.length === 0) {
@@ -5009,6 +5436,154 @@ async function untrack(message) {
   }
 }
 
+// src/commands/vote-lockdown.ts
+var vote_lockdown_exports = {};
+__export(vote_lockdown_exports, {
+  onReady: () => onReady6,
+  setLockdownCategory: () => setLockdownCategory,
+  voteLockdown: () => voteLockdown
+});
+import {
+  CategoryChannel,
+  DMChannel as DMChannel2,
+  PermissionFlagsBits as PermissionFlagsBits3
+} from "discord.js";
+var lockdownCategories = new CachedMap("./data/lockdown-cats.json");
+var lockdownVotes = new CachedMap("./data/lockdown-votes.json");
+var onReady6 = () => Promise.all([lockdownCategories.read(), lockdownVotes.read()]);
+async function setLockdownCategory(message, [categoryId]) {
+  if (message.channel instanceof DMChannel2 || message.channel.lastMessageId === void 0) {
+    await message.reply("no dms");
+    return;
+  }
+  if (!message.channel.permissionsFor(message.member).has(PermissionFlagsBits3.ManageChannels)) {
+    await message.reply(
+      "lol first show me that you can manage chanenls then we talk"
+    );
+    return;
+  }
+  lockdownCategories.set(message.guild.id, categoryId).save();
+  await message.react(select(ok_default));
+}
+var MIN_VOTES = 3;
+var VOTE_PERIOD = 10 * 60 * 1e3;
+async function voteLockdown(message) {
+  const categoryId = lockdownCategories.get(message.guild?.id);
+  const category = message.guild.channels.cache.get(categoryId);
+  if (!(category instanceof CategoryChannel)) {
+    await message.reply("server doesn't have category set to lock down");
+    return;
+  }
+  const votes = lockdownVotes.get(message.guild?.id, []);
+  const now = Date.now();
+  for (let i = 0; i < votes.length; i++) {
+    if (now - votes[i].time > VOTE_PERIOD) {
+      votes.splice(i--, 1);
+    }
+  }
+  if (votes.find((vote) => vote.user === message.author.id)) {
+    lockdownVotes.save();
+    await message.reply("tsk tsk, you've already voted in the past 10 min");
+    return;
+  } else {
+    if (votes.length === 0) {
+      lockdownVotes.set(message.guild.id, votes);
+    }
+    votes.push({ time: now, user: message.author.id });
+    lockdownVotes.save();
+  }
+  if (votes.length >= MIN_VOTES) {
+    const success = await category.permissionOverwrites.resolve(message.guild.roles.everyone.id).edit({ ViewChannel: null }, "Democracy voted to lock the channel.").then(() => true).catch(() => false);
+    await message.channel.send(
+      success ? "unverified folk have been BANISHED from the common people's channels" : "unfortunately i lack the perms to change channel perms oopsi"
+    );
+  } else {
+    await message.reply(
+      `${votes.length} of the minimum ${MIN_VOTES} votes needed to close off the server from them pesky unverifieds`
+    );
+  }
+}
+
+// src/commands/welcome.ts
+var welcome_exports = {};
+__export(welcome_exports, {
+  onJoin: () => onJoin,
+  onMessage: () => onMessage3,
+  onReady: () => onReady7,
+  setWelcome: () => setWelcome
+});
+import {
+  DMChannel as DMChannel3,
+  PermissionFlagsBits as PermissionFlagsBits4,
+  TextChannel
+} from "discord.js";
+var welcomeChannels = new CachedMap(
+  "./data/welcome-channels.json"
+);
+var sentienceMsgSent = new CachedMap(
+  "./data/sentience-msg-sent.json"
+);
+var onReady7 = () => Promise.all([welcomeChannels.read(), sentienceMsgSent.read()]);
+async function setWelcome(message, [channelId, welcomeMsg]) {
+  if (message.channel instanceof DMChannel3 || message.channel.lastMessageId === void 0) {
+    await message.reply("no dms");
+    return;
+  }
+  if (!message.channel.permissionsFor(message.member).has(PermissionFlagsBits4.ManageGuild)) {
+    await message.reply(
+      "why should i obey you if you cant even manage the server lmao"
+    );
+    return;
+  }
+  welcomeChannels.set(message.guild.id, { channelId, message: welcomeMsg }).save();
+  await message.react(select(ok_default));
+}
+async function onJoin(member) {
+  const { channelId, message } = welcomeChannels.get(member.guild.id) ?? {};
+  if (!channelId) return;
+  const channel = member.guild.channels.cache.get(channelId);
+  if (!(channel instanceof TextChannel)) return;
+  await channel.send({
+    content: select([
+      "Hi, {USER}; please read this:",
+      "Welcome, {USER}! Read this:",
+      "Hey, {USER}! Let's see if you can read.",
+      "{USER}, I have been told to show you this."
+    ]).replace("{USER}", member.toString()),
+    embeds: [
+      {
+        description: message,
+        footer: {
+          text: "Note: I am just a bot, and I have been instructed to repeat this message to all users who join the server."
+        }
+      }
+    ]
+  });
+}
+async function onMessage3(message) {
+  if (!message.guild) return;
+  const { channelId } = welcomeChannels.get(message.guild.id) ?? {};
+  if (message.channel.id === channelId && !message.author.bot) {
+    if (!sentienceMsgSent.get(`${message.guild.id}-${message.author.id}`)) {
+      await message.reply({
+        content: message.content.length > 15 ? select([
+          "Thanks! You'll be verified... eventually. Bureaucracy is slow.",
+          "This message might be enough proof that you're sentient. You can send more if you want, just in case. I'm just a bot.",
+          "Cool! I'm just a bot, so I can't tell if this means you're sentient. We'll have to wait and see."
+        ]) : select([
+          "That's a bit short of a message. Try sending more to prove that you're not a bot, and you'll be verified eventually.",
+          "Say more. Couldn't a bot have said that as well? Once you're prove you're human you'll eventually be verified.",
+          "The more you write, the better. Show me your definitely human imagination! If your messages are satisfactorily humanlike, you will eventually get verified."
+        ]),
+        allowedMentions: {
+          repliedUser: false
+        }
+      });
+      sentienceMsgSent.set(`${message.guild.id}-${message.author.id}`, true).save();
+    }
+  }
+}
+
 // src/commands/about.ts
 var about_exports = {};
 __export(about_exports, {
@@ -5097,515 +5672,9 @@ async function ignore(message) {
 // src/commands/internals.ts
 var internals_exports = {};
 __export(internals_exports, {
-  debugScraper: () => debugScraper,
   exit: () => exit
 });
 import { exec } from "child_process";
-
-// src/utils/free-food.ts
-import { ApiError, GoogleGenAI } from "@google/genai";
-import fs2 from "fs/promises";
-import { MongoClient } from "mongodb";
-import playwright from "playwright";
-import sharp from "sharp";
-
-// src/utils/display-error.ts
-function displayError(error, maxLength = 1800) {
-  if (error instanceof Error) {
-    return (error.stack ?? `${error.name}: ${error.message}`).slice(
-      0,
-      maxLength
-    );
-  } else {
-    return `unknown error ${String(error)}`;
-  }
-}
-
-// src/utils/notify.ts
-var channelPromise;
-async function getChannel(client2, channelId) {
-  const channel = await client2.channels.fetch(channelId);
-  if (channel?.isTextBased()) {
-    return channel;
-  } else {
-    throw new Error(`channel ${channelId} does not exist D:`);
-  }
-}
-async function notify(client2, message, { color = "info", pingOwner = false, file, footer } = {}) {
-  if (!process.env.DEBUG_CHANNEL) {
-    return;
-  }
-  channelPromise ??= getChannel(client2, process.env.DEBUG_CHANNEL);
-  const channel = await channelPromise;
-  await channel.send({
-    content: pingOwner ? `<@${process.env.OWNER}>` : "",
-    embeds: [
-      {
-        description: message,
-        color: color === "error" ? 16460854 : 47323,
-        footer: footer !== void 0 ? { text: footer } : void 0
-      }
-    ],
-    files: file ? [file] : void 0
-  });
-}
-
-// src/utils/free-food.ts
-var collectionPromise;
-async function getCollection() {
-  const client2 = new MongoClient(
-    `mongodb+srv://${process.env.FREE_FOOD_MONGO_USERPASS}@bruh.duskolx.mongodb.net/?retryWrites=true&w=majority&appName=Bruh`
-  );
-  await client2.connect();
-  const db = client2.db("events_db");
-  return db.collection("events_collection");
-}
-function selectBest(candidates, excludeSquare = false) {
-  return candidates.reduce(
-    (cum, curr) => {
-      if (excludeSquare && curr.width === curr.height) {
-        return cum;
-      }
-      return curr.width > cum.width ? curr : cum;
-    },
-    { width: 0, height: 0, url: "" }
-  ).url;
-}
-var schemaPrompt = `output only a JSON array of event objects without any explanation or formatting, whose contents each conform to the following schema.
-
-{
-  "provided": string[], // List of tangible items (i.e. food and merch) provided at the event, if any, using the original phrasing from the post (e.g. "Dirty Birds", "Tapex", "boba", "refreshments", "snacks", "food", "T-shirt"). Exclude items that must be purchased (e.g. fundraisers or discounts).
-  "location": string,
-  "date": { "year": number; "month": number; "date": number }, // Month is between 1 and 12
-  "start": { "hour": number; "minute": number }, // 24-hour format. Tip: something like "6-9 pm" is the same as "6 pm to 9 pm"
-  "end": { "hour": number; "minute": number } // 24-hour format, optional and omitted if no end time specified
-}`;
-var fmt = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Los_Angeles",
-  dateStyle: "long"
-  // omit time or gemini will use the current time for the event :/
-});
-var ai;
-var geminiCalls = 0;
-var starting = 0;
-var geminiReady = Promise.resolve();
-var FreeFoodScraper = class {
-  #allUserStories = [];
-  #allTimelinePosts = [];
-  #model = "gemini-2.0-flash";
-  logs = "";
-  #log(message, error) {
-    if (this.logs) {
-      this.logs += "\n";
-    }
-    this.logs += message;
-    if (error !== void 0) {
-      this.logs += " " + error;
-    } else {
-    }
-  }
-  async #fetchImage(url, retries = 0) {
-    try {
-      const response = await fetch(url).catch((error) => {
-        this.#log("[image]", error);
-        return Promise.reject(new Error(`Fetch error: ${url}`));
-      });
-      return response.arrayBuffer();
-    } catch (error) {
-      if (retries < 3) {
-        this.#log("[image]", error);
-        this.#log(
-          `[image] fetch failed. will try again in 5 secs. retries = ${retries}`
-        );
-        await new Promise((resolve) => setTimeout(resolve, 5 * 1e3));
-        return this.#fetchImage(url, retries + 1);
-      } else {
-        throw error;
-      }
-    }
-  }
-  async #readImages(images, timestamp, caption, retries = 0) {
-    const { promise, resolve } = Promise.withResolvers();
-    const oldPromise = geminiReady;
-    geminiReady = geminiReady.then(() => promise);
-    await oldPromise;
-    if (geminiCalls >= 15) {
-      const ready = starting + 60 * 1e3;
-      const delay = Math.max(ready - Date.now(), 0);
-      this.#log(
-        `[gemini] taking a ${delay / 1e3 + 5} sec break to cool off on gemini`
-      );
-      await new Promise((resolve2) => setTimeout(resolve2, delay));
-      await new Promise((resolve2) => setTimeout(resolve2, 5e3));
-      geminiCalls = 0;
-    }
-    if (geminiCalls === 0) {
-      starting = Date.now();
-    }
-    geminiCalls++;
-    ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    try {
-      const result = await ai.models.generateContent({
-        model: this.#model,
-        contents: [
-          ...images.map(
-            (buffer) => ({
-              inlineData: {
-                data: Buffer.from(buffer).toString("base64"),
-                mimeType: "image/jpeg"
-              }
-            })
-          ),
-          {
-            text: `Using the following flyer${images.length !== 1 ? "s" : ""}${caption ? " and caption" : ""}, which was posted ${fmt.format(timestamp)}, ${schemaPrompt}` + (caption ? "\n\n" + caption : "")
-          }
-        ],
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-      return JSON.parse(
-        // sometimes will generate `"minute": 05` or `00`
-        result.text?.replace(
-          /"minute":\s*0+([0-9])/,
-          (_, digit) => `"minute": ${digit}`
-        ) ?? "{}"
-      );
-    } catch (error) {
-      if (retries < 5 && error instanceof ApiError && (error.status === 503 || error.status === 500 || error.status === 429)) {
-        this.#log("[gemini]", error);
-        let timeout = 60 * (retries + 1) + 5;
-        if (error.status === 429) {
-          const match = error.message.match(/"retryDelay":"(\d+)s"/);
-          if (match) {
-            timeout = +match[1] + 5;
-          }
-          if (error.message.includes("GenerateRequestsPerDayPerProjectPerModel")) {
-            if (this.#model === "gemini-2.0-flash") {
-              this.#model = "gemini-2.5-flash";
-              this.#log(
-                `[gemini] 2.0 flash ratelimit reached, switching to 2.5 flash`
-              );
-            } else {
-              throw new Error(
-                "Doomed. All the models I hardcoded into the bot have run out of daily quota."
-              );
-            }
-          }
-        }
-        this.#log(
-          `[gemini] cooling off for ${timeout} secs then retrying. retries = ${retries}`
-        );
-        await new Promise((resolve2) => setTimeout(resolve2, timeout * 1e3));
-        resolve();
-        return this.#readImages(images, timestamp, caption, retries + 1);
-      } else {
-        throw error;
-      }
-    } finally {
-      resolve();
-    }
-  }
-  async #handleGraphQlResponse(response) {
-    const {
-      data: {
-        xdt_api__v1__feed__reels_media__connection: storyData,
-        xdt_api__v1__feed__timeline__connection: timelineData,
-        ...rest
-      }
-    } = response;
-    if (storyData) {
-      const userStories = storyData.edges.map(
-        ({ node: user }) => ({
-          username: user.user.username,
-          stories: user.items.map((item) => {
-            return {
-              imageUrl: selectBest(item.image_versions2.candidates, true),
-              postId: item.story_feed_media?.[0].media_code ?? null,
-              storyId: item.pk,
-              timestamp: new Date(item.taken_at * 1e3)
-            };
-          })
-        })
-      );
-      this.#allUserStories.push(...userStories);
-      this.#log(`[graph ql] found ${userStories.length} stories`);
-      return;
-    }
-    if (timelineData) {
-      const timelinePosts = timelineData.edges.flatMap(
-        ({ node: { media } }) => {
-          if (!media) {
-            return [];
-          }
-          const images = media.carousel_media ?? [media];
-          return [
-            {
-              username: media.owner.username,
-              caption: media.caption?.text ?? "",
-              imageUrls: images.map(
-                ({ image_versions2 }) => selectBest(image_versions2.candidates)
-              ),
-              postId: media.code,
-              timestamp: new Date(media.taken_at * 1e3)
-            }
-          ];
-        }
-      );
-      this.#allTimelinePosts.push(...timelinePosts);
-      this.#log(`[graph ql] found ${timelinePosts.length} posts`);
-      return;
-    }
-    this.#log(`[graph ql] has no posts/stories: ${Object.keys(rest)[0]}`);
-  }
-  async #handleResponse(response) {
-    const url = response.url();
-    if (new URL(url).pathname === "/graphql/query") {
-      const buffer = await response.body();
-      await this.#handleGraphQlResponse(JSON.parse(buffer.toString("utf-8")));
-    }
-  }
-  async #insertIfNew(sourceId, url, imageUrls, timestamp, caption) {
-    collectionPromise ??= getCollection();
-    const collection = await collectionPromise;
-    const existingDoc = await collection.findOne({ sourceId });
-    if (existingDoc) {
-      this.#log(`[insert] ${sourceId} already added`);
-      return 0;
-    }
-    const images = await Promise.all(
-      imageUrls.map((url2) => this.#fetchImage(url2))
-    );
-    const events = (await this.#readImages(images, timestamp, caption)).filter(
-      (event) => (event.provided ?? []).length > 0
-    );
-    if (events.length > 0) {
-      for (const event of events) {
-        if (event.date.year !== (/* @__PURE__ */ new Date()).getFullYear()) {
-          this.#log(`[insert] ${JSON.stringify(event)} is in a weird year`);
-        }
-      }
-      const buffer = await sharp(images[0]).resize(80, 100, { fit: "cover" }).webp({ quality: 20 }).toBuffer();
-      const previewData = buffer.toString("base64");
-      await collection.insertMany(
-        events.map(
-          ({ provided, ...event }) => ({
-            freeFood: provided,
-            ...event,
-            sourceId,
-            url,
-            previewData,
-            postTimestamp: timestamp,
-            caption,
-            result: true
-          })
-        )
-      );
-    } else {
-      await collection.insertOne({
-        sourceId,
-        url,
-        result: false
-      });
-    }
-    this.#log(`[insert] ${sourceId} added ${JSON.stringify(events)}`);
-    return events.length;
-  }
-  async main() {
-    await fs2.rm("data/free-food-debug-screenshot.png", { force: true });
-    const browser = await playwright.firefox.launch();
-    const context = await browser.newContext();
-    await context.addCookies(
-      Object.entries({
-        ig_nrcb: "1",
-        ps_l: "1",
-        ps_n: "1",
-        wd: "1440x825",
-        ...JSON.parse(process.env.FREE_FOOD_COOKIES ?? "{}")
-      }).map(([name, value]) => ({
-        name,
-        value: String(value),
-        path: "/",
-        domain: ".instagram.com"
-      }))
-    );
-    const page = await context.newPage();
-    const promises = [];
-    try {
-      page.on("response", (response) => {
-        promises.push(this.#handleResponse(response));
-      });
-      await page.goto("https://instagram.com/");
-      function* analyze(x) {
-        for (const req of x.require ?? []) {
-          const args = req.at(-1);
-          for (const arg of args) {
-            if (arg?.__bbox) {
-              if (arg.__bbox.complete) yield arg.__bbox.result;
-              else yield* analyze(arg.__bbox);
-            }
-          }
-        }
-      }
-      let hasThereBeenAGraphQlResponse = false;
-      for (const script of await page.locator('css=script[type="application/json"]').all()) {
-        const json = await script.textContent().then((json2) => json2 && JSON.parse(json2)).catch(() => {
-        });
-        const results = Array.from(analyze(json));
-        for (const result of results) {
-          await this.#handleGraphQlResponse(result);
-          hasThereBeenAGraphQlResponse = true;
-        }
-      }
-      if (!hasThereBeenAGraphQlResponse) {
-        throw new Error(
-          "[browser] No graphql responses received. Something is awry."
-        );
-      }
-      this.#log("[browser] Scrolling down posts...");
-      for (let i = 0; i < 10; i++) {
-        await page.keyboard.press("End");
-        await page.waitForRequest(
-          (request) => new URL(request.url()).pathname === "/graphql/query",
-          { timeout: 1e3 }
-        ).catch(
-          () => this.#log("[browser] no graphql query from pressing end key")
-        );
-        await page.waitForTimeout(500);
-        this.#log(`[browser] end key ${i + 1}`);
-      }
-      await page.keyboard.press("Home");
-      const storyScroller = page.locator(
-        'css=[data-pagelet="story_tray"] [role=presentation]'
-      );
-      await storyScroller.hover();
-      for (let i = 0; i < 10; i++) await page.mouse.wheel(1e3, 0);
-      await page.locator('css=[aria-label^="Story by"]').last().click();
-      this.#log("[browser] Reading stories from end...");
-      await page.waitForRequest(
-        (request) => new URL(request.url()).pathname === "/graphql/query"
-      );
-      this.#log("[browser] It seems the stories have opened.");
-      await page.waitForTimeout(1e3);
-      for (let i = 0; ; i++) {
-        if (i > 100) {
-          throw new Error("why am i on story page 100");
-        }
-        let story = page.locator('css=a[href^="/stories/"]');
-        story = story.first();
-        const atEnd = await story.evaluate((link) => {
-          return !!link.parentElement?.previousElementSibling?.querySelector(
-            '[aria-label="Menu"]'
-          );
-        });
-        if (atEnd) {
-          this.#log("[browser] We're done with stories! yay");
-          break;
-        }
-        await story.click();
-        await page.waitForRequest(
-          (request) => new URL(request.url()).pathname === "/graphql/query",
-          { timeout: 1e3 }
-        ).catch(
-          () => this.#log(
-            "[browser] no graphql query from paging down story, oh well"
-          )
-        );
-        await page.waitForTimeout(500);
-        this.#log(`[browser] story pagination ${i + 1}`);
-      }
-      await page.context().storageState({ path: "data/free-food-debug-auth.json" });
-    } catch (error) {
-      await page.screenshot({
-        path: "data/free-food-debug-screenshot.png",
-        fullPage: true
-      });
-      throw error;
-    } finally {
-      await context.close();
-      await browser.close();
-      this.#log("[browser] i close the browser");
-    }
-    await Promise.all(promises);
-    let total = 0;
-    for (const { username, stories } of this.#allUserStories) {
-      for (const { storyId, postId, imageUrl, timestamp } of stories) {
-        const sourceId = `story/${username}/${storyId}`;
-        const url = postId ? `https://www.instagram.com/p/${postId}/` : `https://www.instagram.com/stories/${username}/${storyId}/`;
-        total += await this.#insertIfNew(sourceId, url, [imageUrl], timestamp);
-      }
-    }
-    for (const { username, postId, caption, imageUrls, timestamp } of this.#allTimelinePosts) {
-      const sourceId = `post/${username}/${postId}`;
-      const url = `https://www.instagram.com/p/${postId}/`;
-      total += await this.#insertIfNew(
-        sourceId,
-        url,
-        imageUrls,
-        timestamp,
-        caption
-      );
-    }
-    this.#log("[insert] ok gamers we done");
-    return total;
-  }
-};
-function getNextTime() {
-  const date = /* @__PURE__ */ new Date();
-  date.setMinutes(Math.floor(Math.random() * 60));
-  if (date.getHours() >= 17) {
-    date.setDate(date.getDate() + 1);
-    date.setHours(date.getDay() === 0 ? 17 : 10);
-  } else if (date.getHours() < 10) {
-    date.setHours(10);
-  } else if (date.getDay() === 1 && date.getHours() < 12) {
-    date.setHours(12);
-  } else {
-    date.setHours(17);
-  }
-  return date;
-}
-async function scrapeFreeFood(client2, nextTime) {
-  const start = performance.now();
-  const getFooter = () => `Took ${((performance.now() - start) / 1e3).toFixed(
-    3
-  )}s. Next: ${nextTime.toLocaleString("sv-SE")}`;
-  const scraper = new FreeFoodScraper();
-  try {
-    const added = await scraper.main();
-    await notify(client2, `${added} events added.`, {
-      footer: getFooter()
-    });
-  } catch (error) {
-    await notify(client2, `\`\`\`
-${scraper.logs.slice(-3e3)}
-\`\`\``, {
-      footer: getFooter()
-    });
-    await notify(client2, `\`\`\`
-${displayError(error)}
-\`\`\``, {
-      color: "error",
-      pingOwner: true,
-      file: await fs2.stat("data/free-food-debug-screenshot.png").then(() => "data/free-food-debug-screenshot.png").catch(() => void 0)
-    });
-  }
-}
-async function autoFreeFood(client2) {
-  let nextTime = getNextTime();
-  setInterval(() => {
-    if (Date.now() >= nextTime.getTime()) {
-      nextTime = getNextTime();
-      scrapeFreeFood(client2, nextTime);
-    }
-  }, 60 * 1e3);
-  await notify(
-    client2,
-    `The first scrape will be <t:${Math.floor(nextTime.getTime() / 1e3)}>.`
-  );
-}
-
-// src/commands/internals.ts
 function execute(command) {
   return new Promise((resolve) => {
     exec(command, (error, stdout, stderr) => {
@@ -5614,7 +5683,7 @@ function execute(command) {
   });
 }
 function displayResults(results) {
-  return results.map((result) => result ? "```sh\n" + result + "\n```" : "\u{1F44C}").join("\n");
+  return results.map((result) => result ? "```shell\n" + result + "\n```" : "\u{1F44C}\n").join("");
 }
 async function exit(message) {
   if (message.author.id === process.env.OWNER) {
@@ -5640,6 +5709,7 @@ async function exit(message) {
     await reportExec("git pull");
     await reportExec("npm install");
     await reportExec("npx playwright install firefox");
+    await reportExec("npm run build");
     results.push("Exiting...");
     await msg.edit(displayResults(results));
     process.exit();
@@ -5652,49 +5722,6 @@ async function exit(message) {
         "scram plebian"
       ])
     );
-  }
-}
-async function debugScraper(message) {
-  if (message.author.id !== process.env.OWNER) {
-    await message.reply("fuck off");
-    return;
-  }
-  await message.react("\u{1F440}");
-  const start = performance.now();
-  const scraper = new FreeFoodScraper();
-  try {
-    const added = await scraper.main();
-    const end = performance.now();
-    await message.reply({
-      embeds: [
-        {
-          description: `${added} events added.`,
-          footer: { text: `Took ${((end - start) / 1e3).toFixed(3)}s` }
-        }
-      ]
-    });
-  } catch (error) {
-    const end = performance.now();
-    await message.reply({
-      embeds: [
-        {
-          description: `\`\`\`
-${scraper.logs.slice(-3e3)}
-\`\`\``,
-          footer: { text: `Took ${((end - start) / 1e3).toFixed(3)}s` }
-        }
-      ]
-    });
-    await message.reply({
-      embeds: [
-        {
-          description: `\`\`\`
-${displayError(error)}
-\`\`\``,
-          color: 16711680
-        }
-      ]
-    });
   }
 }
 
@@ -5785,7 +5812,7 @@ async function help(message) {
 var ownerCommands = {
   "ignore us please": ignore_us_exports.ignore,
   exeunt: internals_exports.exit,
-  "debug scraper": internals_exports.debugScraper
+  "debug scraper": free_food_exports.debugScraper
 };
 var commands = {
   "source of <id>": source_exports.getSource,
@@ -6010,7 +6037,7 @@ fs3.ensureDir("./data/").then(
   () => Promise.all([
     minecraft_exports.init(client),
     ucpd_exports.init(client),
-    autoFreeFood(client)
+    free_food_exports.init(client)
   ])
 ).catch((err) => {
   console.error(err);
