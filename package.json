@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "esbuild src/index.ts --format=esm --platform=node --bundle --packages=external --outfile=src/bundle.mjs",
-    "dev": "npm run build && npm start",
+    "dev": "npm run build && npm start -- --dev",
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -8,7 +8,7 @@ import playwright from 'playwright'
 import sharp from 'sharp'
 import { displayError } from '../utils/display-error'
 import { notify } from '../utils/notify'
-import { isDev, proofOfDevness } from '../utils/isDev'
+import { isDev } from '../utils/isDev'
 
 let collectionPromise: Promise<Collection<ScrapedEvent>> | undefined
 
@@ -619,7 +619,6 @@ export class FreeFoodScraper {
           await page.keyboard.press('End')
         }
         await promise
-        await page.waitForTimeout(500) // give time for page to update so i can press end key again
       }
       await page.keyboard.press('Home')
       // scroll to end has several benefits:
@@ -640,13 +639,15 @@ export class FreeFoodScraper {
       this.#log('[browser] It seems the stories have opened.')
       await page.waitForTimeout(1000)
       for (let i = 0; ; i++) {
-        if (i > 100) {
-          throw new Error('why am i on page 100')
+        // NOTE: this might happen when the account follows 200 people (rn it's
+        // 131)
+        if (i > 200) {
+          throw new Error('why am i on page 200')
         }
-        await page.screenshot({
-          path: `data/screen-stories-${i}.png`
-          // fullPage: true
-        })
+        // await page.screenshot({
+        //   path: `data/screen-stories-${i}.png`
+        //   // fullPage: true
+        // })
         let story = page.locator('css=a[href^="/stories/"]')
         // click first visible story
         story = story.first()
@@ -663,19 +664,32 @@ export class FreeFoodScraper {
           this.#log("[browser] We're done with stories! yay")
           break
         }
-        await story.click()
-        await page
+        const start = performance.now()
+        let done = false
+        const promise = page
           .waitForRequest(
             request => new URL(request.url()).pathname === '/graphql/query',
             { timeout: 1000 }
           )
-          .catch(() =>
+          .then(() =>
             this.#log(
-              '[browser] no graphql query from paging down story, oh well'
+              `[browser] story left ${i + 1}: graphql took ${(
+                (performance.now() - start) /
+                1000
+              ).toFixed(3)}s`
             )
           )
-        await page.waitForTimeout(500) // give time for page to update so i can press end key again
-        this.#log(`[browser] story pagination ${i + 1}`)
+          .catch(() =>
+            this.#log(`[browser] story left ${i + 1}: no graphql query`)
+          )
+          .finally(() => {
+            done = true
+          })
+        while (!done) {
+          await page.keyboard.press('ArrowLeft')
+          await page.waitForTimeout(100 + Math.random() * 100)
+        }
+        await promise
       }
       await page
         .context()
@@ -807,9 +821,7 @@ export async function init (client: Client): Promise<void> {
   }, 60 * 1000)
   await notify(
     client,
-    `The first scrape will be <t:${Math.floor(
-      nextTime.getTime() / 1000
-    )}>.${proofOfDevness}`
+    `The first scrape will be <t:${Math.floor(nextTime.getTime() / 1000)}>.`
   )
 }
 
