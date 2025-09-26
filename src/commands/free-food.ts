@@ -874,7 +874,11 @@ export async function debugScraper (message: Message): Promise<void> {
           description: `Saw ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new). ${inserted} new events added.`,
           footer: { text: getFooter() }
         }
-      ]
+      ],
+      files: await fs
+        .stat('data/free-food-debug-screenshot.png')
+        .then(() => ['data/free-food-debug-screenshot.png'])
+        .catch(() => [])
     })
   } catch (error) {
     await message.reply({
