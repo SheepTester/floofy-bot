@@ -617,7 +617,7 @@ export class FreeFoodScraper {
         // keep trying to scroll to bottom
         while (!done) {
           await page.keyboard.press('End')
-          await page.waitForTimeout(100 + Math.random() * 100)
+          await page.waitForTimeout(500 + Math.random() * 500)
         }
         await promise
       }
@@ -633,7 +633,7 @@ export class FreeFoodScraper {
       await storyScroller.hover()
       for (let i = 0; i < 10; i++) {
         await page.mouse.wheel(1000, 0)
-        await page.waitForTimeout(100 + Math.random() * 100)
+        await page.waitForTimeout(500 + Math.random() * 500)
       }
       const waitReq = page.waitForRequest(
         request => new URL(request.url()).pathname === '/graphql/query'
@@ -697,11 +697,11 @@ export class FreeFoodScraper {
             done = true
           })
         await story.click()
-        await page.waitForTimeout(100 + Math.random() * 100)
+        await page.waitForTimeout(500 + Math.random() * 500)
         while (!done) {
           // go up by user rather than story
           await page.keyboard.press('ArrowUp')
-          await page.waitForTimeout(100 + Math.random() * 100)
+          await page.waitForTimeout(500 + Math.random() * 500)
         }
         await promise
       }
@@ -754,12 +754,16 @@ export class FreeFoodScraper {
     }
 
     this.#log('[insert] ok gamers we done')
+    const totalStories = this.#allUserStories.reduce(
+      (cum, curr) => cum + curr.stories.length,
+      0
+    )
     return {
       inserted: total,
       posts: this.#allTimelinePosts.length,
       newPosts: this.#allTimelinePosts.length - oldPosts,
-      stories: this.#allUserStories.length,
-      newStories: this.#allUserStories.length - oldStories
+      stories: totalStories,
+      newStories: totalStories - oldStories
     }
   }
 }
