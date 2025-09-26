@@ -808,7 +808,13 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
     await notify(
       client,
       `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new).`,
-      { footer: getFooter() }
+      {
+        footer: getFooter(),
+        file: await fs
+          .stat('data/free-food-debug-screenshot.png')
+          .then(() => 'data/free-food-debug-screenshot.png')
+          .catch(() => undefined)
+      }
     )
   } catch (error) {
     await notify(client, `\`\`\`\n${scraper.logs.slice(-3000)}\n\`\`\``, {
