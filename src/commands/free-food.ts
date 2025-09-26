@@ -859,7 +859,11 @@ export async function debugScraper (message: Message): Promise<void> {
           description: `\`\`\`\n${displayError(error)}\n\`\`\``,
           color: 0xff0000
         }
-      ]
+      ],
+      files: await fs
+        .stat('data/free-food-debug-screenshot.png')
+        .then(() => ['data/free-food-debug-screenshot.png'])
+        .catch(() => [])
     })
   }
 }
