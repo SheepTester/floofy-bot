@@ -673,20 +673,21 @@ export class FreeFoodScraper {
           )
           .then(() =>
             this.#log(
-              `[browser] story left ${i + 1}: graphql took ${(
+              `[browser] story up ${i + 1}: graphql took ${(
                 (performance.now() - start) /
                 1000
               ).toFixed(3)}s`
             )
           )
           .catch(() =>
-            this.#log(`[browser] story left ${i + 1}: no graphql query`)
+            this.#log(`[browser] story up ${i + 1}: no graphql query`)
           )
           .finally(() => {
             done = true
           })
         while (!done) {
-          await page.keyboard.press('ArrowLeft')
+          // go up by user rather than story
+          await page.keyboard.press('ArrowUp')
           await page.waitForTimeout(100 + Math.random() * 100)
         }
         await promise
