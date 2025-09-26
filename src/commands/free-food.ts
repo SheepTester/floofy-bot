@@ -8,7 +8,7 @@ import playwright from 'playwright'
 import sharp from 'sharp'
 import { displayError } from '../utils/display-error'
 import { notify } from '../utils/notify'
-import { isDev } from '../utils/isDev'
+import { isDev, proofOfDevness } from '../utils/isDev'
 
 let collectionPromise: Promise<Collection<ScrapedEvent>> | undefined
 
@@ -807,7 +807,9 @@ export async function init (client: Client): Promise<void> {
   }, 60 * 1000)
   await notify(
     client,
-    `The first scrape will be <t:${Math.floor(nextTime.getTime() / 1000)}>.`
+    `The first scrape will be <t:${Math.floor(
+      nextTime.getTime() / 1000
+    )}>.${proofOfDevness}`
   )
 }
 
