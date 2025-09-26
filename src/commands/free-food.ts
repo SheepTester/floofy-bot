@@ -8,6 +8,7 @@ import playwright from 'playwright'
 import sharp from 'sharp'
 import { displayError } from '../utils/display-error'
 import { notify } from '../utils/notify'
+import { isDev } from '../utils/isDev'
 
 let collectionPromise: Promise<Collection<ScrapedEvent>> | undefined
 
@@ -207,6 +208,8 @@ type ScrapedEvent = (
 type ScrapeStats = {
   posts: number
   stories: number
+  newPosts: number
+  newStories: number
   inserted: number
 }
 
@@ -267,9 +270,11 @@ export class FreeFoodScraper {
     this.logs += message
     if (error !== undefined) {
       this.logs += ' ' + error
-      // console.error(message, error)
-    } else {
-      // console.error(message)
+      if (isDev) {
+        console.error(message, error)
+      }
+    } else if (isDev) {
+      console.error(message)
     }
   }
 
@@ -471,13 +476,13 @@ export class FreeFoodScraper {
     imageUrls: string[],
     timestamp: Date,
     caption?: string
-  ): Promise<number> {
+  ): Promise<number | null> {
     collectionPromise ??= getCollection()
     const collection = await collectionPromise
     const existingDoc = await collection.findOne({ sourceId })
     if (existingDoc) {
       this.#log(`[insert] ${sourceId} already added`)
-      return 0
+      return null
     }
     const images = await Promise.all(
       imageUrls.map(url => this.#fetchImage(url))
@@ -582,16 +587,39 @@ export class FreeFoodScraper {
       this.#log('[browser] Scrolling down posts...')
       for (let i = 0; i < 10; i++) {
         await page.keyboard.press('End') // scroll to bottom
-        await page
+        const start = performance.now()
+        let done = false
+        const promise = page
           .waitForRequest(
             request => new URL(request.url()).pathname === '/graphql/query',
-            { timeout: 1000 }
+            // it takes like 3s for me in the browser, like damn that's slow
+            { timeout: 5000 }
           )
-          .catch(() =>
-            this.#log('[browser] no graphql query from pressing end key')
+          .then(() =>
+            this.#log(
+              `[browser] end key ${i + 1}: graphql took ${(
+                (performance.now() - start) /
+                1000
+              ).toFixed(3)}s`
+            )
           )
+          .catch(async () => {
+            this.#log(`[browser] end key ${i + 1}: no graphql query`)
+            // await page.screenshot({ path: `data/no-graphql-query-${i + 1}.png` })
+            // await page.screenshot({
+            //   path: `data/no-graphql-query-${i + 1}-full.png`,
+            //   fullPage: true
+            // })
+          })
+          .finally(() => {
+            done = true
+          })
+        // keep trying to scroll to bottom
+        while (!done) {
+          await page.keyboard.press('End')
+        }
+        await promise
         await page.waitForTimeout(500) // give time for page to update so i can press end key again
-        this.#log(`[browser] end key ${i + 1}`)
       }
       await page.keyboard.press('Home')
       // scroll to end has several benefits:
@@ -652,6 +680,9 @@ export class FreeFoodScraper {
       await page
         .context()
         .storageState({ path: 'data/free-food-debug-auth.json' })
+
+      // Wait for requests to finish
+      await Promise.all(promises)
     } catch (error) {
       await page.screenshot({
         path: 'data/free-food-debug-screenshot.png',
@@ -666,36 +697,41 @@ export class FreeFoodScraper {
 
     onBrowserEnd?.()
 
-    await Promise.all(promises)
-
     let total = 0
+    let oldStories = 0
     for (const { username, stories } of this.#allUserStories) {
       for (const { storyId, postId, imageUrl, timestamp } of stories) {
         const sourceId = `story/${username}/${storyId}`
         const url = postId
           ? `https://www.instagram.com/p/${postId}/`
           : `https://www.instagram.com/stories/${username}/${storyId}/`
-        total += await this.#insertIfNew(sourceId, url, [imageUrl], timestamp)
+        total +=
+          (await this.#insertIfNew(sourceId, url, [imageUrl], timestamp)) ??
+          (oldStories++, 0)
       }
     }
+    let oldPosts = 0
     for (const { username, postId, caption, imageUrls, timestamp } of this
       .#allTimelinePosts) {
       const sourceId = `post/${username}/${postId}`
       const url = `https://www.instagram.com/p/${postId}/`
-      total += await this.#insertIfNew(
-        sourceId,
-        url,
-        imageUrls,
-        timestamp,
-        caption
-      )
+      total +=
+        (await this.#insertIfNew(
+          sourceId,
+          url,
+          imageUrls,
+          timestamp,
+          caption
+        )) ?? (oldPosts++, 0)
     }
 
     this.#log('[insert] ok gamers we done')
     return {
       inserted: total,
       posts: this.#allTimelinePosts.length,
-      stories: this.#allUserStories.length
+      newPosts: this.#allTimelinePosts.length - oldPosts,
+      stories: this.#allUserStories.length,
+      newStories: this.#allUserStories.length - oldStories
     }
   }
 }
@@ -739,10 +775,11 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
     )}. Next: ${nextTime.toLocaleString('sv-SE')}`
   const scraper = new FreeFoodScraper()
   try {
-    const { inserted, posts, stories } = await scraper.main()
+    const { inserted, posts, newPosts, stories, newStories } =
+      await scraper.main()
     await notify(
       client,
-      `${inserted} new events added from ${posts} posts, ${stories} stories.`,
+      `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new).`,
       { footer: getFooter() }
     )
   } catch (error) {
@@ -785,21 +822,22 @@ export async function debugScraper (message: Message): Promise<void> {
   const getFooter = () => `${displayTime(performance.now() - start)} elasped`
   const scraper = new FreeFoodScraper()
   try {
-    const { inserted, posts, stories } = await scraper.main(async () => {
-      await message.reply({
-        allowedMentions: { repliedUser: false },
-        embeds: [
-          {
-            description: `Browser has closed.`,
-            footer: { text: getFooter() }
-          }
-        ]
+    const { inserted, posts, newPosts, stories, newStories } =
+      await scraper.main(async () => {
+        await message.reply({
+          allowedMentions: { repliedUser: false },
+          embeds: [
+            {
+              description: `Browser has closed.`,
+              footer: { text: getFooter() }
+            }
+          ]
+        })
       })
-    })
     await message.reply({
       embeds: [
         {
-          description: `Saw ${posts} posts, ${stories} stories. ${inserted} new events added.`,
+          description: `Saw ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new). ${inserted} new events added.`,
           footer: { text: getFooter() }
         }
       ]

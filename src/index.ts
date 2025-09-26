@@ -308,12 +308,12 @@ client.on('messageReactionRemove', async (reaction, user) => {
 })
 
 process.on('unhandledRejection', async reason => {
-  try {
-    console.error(reason)
-    // Risky because if `notify` does not await a rejecting promise then this
-    // might infinite loop
-    await notify(client, displayError(reason), { color: 'error' })
-  } catch {}
+  console.error(reason)
+  // Risky because if `notify` does not await a rejecting promise then this
+  // might infinite loop
+  await notify(client, `\`\`\`\n${displayError(reason)}\n\`\`\``, {
+    color: 'error'
+  }).catch(error => console.error('Failed to notify error', error))
 })
 process.on('uncaughtException', reason => {
   console.error(reason)

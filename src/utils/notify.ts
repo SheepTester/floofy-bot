@@ -1,4 +1,5 @@
 import { Client, TextBasedChannel } from 'discord.js'
+import { isDev } from './isDev'
 
 let channelPromise: Promise<TextBasedChannel> | undefined
 
@@ -35,7 +36,7 @@ export async function notify (
     embeds: [
       {
         description: message,
-        color: color === 'error' ? 0xfb2c36 : 0x00b8db,
+        color: color === 'error' ? 0xfb2c36 : isDev ? 0xf0b100 : 0x00b8db,
         footer: footer !== undefined ? { text: footer } : undefined
       }
     ],
