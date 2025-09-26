@@ -617,6 +617,7 @@ export class FreeFoodScraper {
         // keep trying to scroll to bottom
         while (!done) {
           await page.keyboard.press('End')
+          await page.waitForTimeout(100 + Math.random() * 100)
         }
         await promise
       }
@@ -630,12 +631,18 @@ export class FreeFoodScraper {
         'css=[data-pagelet="story_tray"] [role=presentation]'
       )
       await storyScroller.hover()
-      for (let i = 0; i < 10; i++) await page.mouse.wheel(1000, 0)
-      await page.locator('css=[aria-label^="Story by"]').last().click()
-      this.#log('[browser] Reading stories from end...')
-      await page.waitForRequest(
+      for (let i = 0; i < 10; i++) {
+        await page.mouse.wheel(1000, 0)
+        await page.waitForTimeout(100 + Math.random() * 100)
+      }
+      const waitReq = page.waitForRequest(
         request => new URL(request.url()).pathname === '/graphql/query'
       )
+      // it might make the request immediately while clicking so need to wait
+      // for request before click :/
+      await page.locator('css=[aria-label^="Story by"]').last().click()
+      this.#log('[browser] Reading stories from end...')
+      await waitReq
       this.#log('[browser] It seems the stories have opened.')
       await page.waitForTimeout(1000)
       for (let i = 0; ; i++) {
