@@ -649,7 +649,11 @@ export class FreeFoodScraper {
         // NOTE: this might happen when the account follows 200 people (rn it's
         // 131)
         if (i > 200) {
-          throw new Error('why am i on page 200')
+          await page.screenshot({
+            path: 'data/free-food-debug-screenshot.png',
+            fullPage: true
+          })
+          break
         }
         // await page.screenshot({
         //   path: `data/screen-stories-${i}.png`
@@ -692,6 +696,8 @@ export class FreeFoodScraper {
           .finally(() => {
             done = true
           })
+        await story.click()
+        await page.waitForTimeout(100 + Math.random() * 100)
         while (!done) {
           // go up by user rather than story
           await page.keyboard.press('ArrowUp')
