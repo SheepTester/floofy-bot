@@ -748,22 +748,26 @@ export class FreeFoodScraper {
           break
         }
         // [...$$('[aria-label="Menu"]')[0].closest('[style*="transform: translate"]').querySelectorAll('[role="link"]')][1].textContent
-        const username = await page
+        const usernames = await page
           .locator('css=[aria-label="Menu"]')
           .first()
           .evaluate(menuBtn => {
             const parent = menuBtn.closest('[style*="transform: translate"]')
             if (!parent) {
-              this.#log('[username] No translate parent')
               return null
             }
             const usernames = Array.from(
               parent.querySelectorAll('[role="link"]'),
               link => link.textContent
             )
-            this.#log(`[username] Usernames: ${JSON.stringify(usernames)}`)
-            return usernames[1]
+            return usernames
           })
+        if (usernames === null) {
+          this.#log('[username] No translate parent')
+        } else {
+          this.#log(`[username] Usernames: ${JSON.stringify(usernames)}`)
+        }
+        const username = usernames?.[1]
         if (!username) {
           throw new Error('Expected to find a story username')
         }
