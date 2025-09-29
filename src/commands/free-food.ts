@@ -3,7 +3,7 @@ import { ApiError, GoogleGenAI } from '@google/genai'
 import { Client, Message } from 'discord.js'
 import fs from 'fs/promises'
 import { Collection, MongoClient } from 'mongodb'
-import type { Response } from 'playwright'
+import type { Page, Response } from 'playwright'
 import playwright from 'playwright'
 import sharp from 'sharp'
 import { displayError } from '../utils/display-error'
@@ -232,6 +232,7 @@ type ScrapeStats = {
   newPosts: number
   newStories: number
   inserted: number
+  note: string
 }
 
 /**
@@ -564,6 +565,47 @@ export class FreeFoodScraper {
     return events.length
   }
 
+  async #scrollStories (
+    page: Page,
+    target?: string
+  ): Promise<playwright.Locator> {
+    try {
+      while (true) {
+        await page
+          .locator('css=[data-pagelet="story_tray"] [aria-label="Next"]')
+          .click({ timeout: 100 })
+        await page.waitForTimeout(100 + Math.random() * 400)
+      }
+    } catch (error) {
+      this.#log(
+        `Failed to find next story row page button. We're at the end!: ${displayError(
+          error
+        )}`
+      )
+    }
+    if (!target) {
+      return page.locator('css=[aria-label^="Story by"]').last()
+    }
+    // tbh this for loop is not necessary because page.locator will fail when it
+    // doesn't see the Go back button
+    for (let i = 0; i < 50; i++) {
+      const count = await page
+        .locator(`css=[aria-label^="Story by ${target},"]`)
+        .count()
+      if (count === 1) {
+        return page.locator(`css=[aria-label^="Story by ${target},"]`)
+      }
+      if (count > 1) {
+        throw new Error(`Found multiple for ${target}`)
+      }
+      await page
+        .locator('css=[data-pagelet="story_tray"] [aria-label="Go back"]')
+        .click({ timeout: 100 })
+      await page.waitForTimeout(100 + Math.random() * 400)
+    }
+    throw new Error(`Couldn't find ${target} in 50 pages`)
+  }
+
   async main (onBrowserEnd?: () => void): Promise<ScrapeStats> {
     await fs.rm('data/free-food-debug-screenshot.png', { force: true })
 
@@ -657,45 +699,33 @@ export class FreeFoodScraper {
         // keep trying to scroll to bottom
         while (!done) {
           await page.keyboard.press('End')
-          await page.waitForTimeout(500 + Math.random() * 500)
+          await page.waitForTimeout(100 + Math.random() * 400)
         }
         await promise
       }
       await page.keyboard.press('Home')
       // scroll to end has several benefits:
       // - no ads
-      // - will include already-read storeies
+      // - will include already-read stories
       // downside:
-      // - will include already-read storeies
-      const storyScroller = page.locator(
-        'css=[data-pagelet="story_tray"] [role=presentation]'
-      )
-      await storyScroller.hover()
-      for (let i = 0; i < 10; i++) {
-        await page.mouse.wheel(1000, 0)
-        await page.waitForTimeout(500 + Math.random() * 500)
-      }
+      // - will include already-read stories
+      const target = await this.#scrollStories(page)
       const waitReq = page.waitForRequest(
         request => new URL(request.url()).pathname === '/graphql/query'
       )
       // it might make the request immediately while clicking so need to wait
       // for request before click :/
-      await page.locator('css=[aria-label^="Story by"]').last().click()
+      await target.click()
       this.#log('[browser] Reading stories from end...')
       await waitReq
       this.#log('[browser] It seems the stories have opened.')
       await page.waitForTimeout(1000)
       const seenUsernames = new Set<string>()
-      let lastUsername = ''
+      let lastUsername: string | null = null
+      let stuckAt: string | null = null
       for (let i = 0; ; i++) {
-        // NOTE: this might happen when the account follows 200 people (rn it's
-        // 131)
         if (i > 500) {
-          await page.screenshot({
-            path: 'data/free-food-debug-screenshot.png',
-            fullPage: true
-          })
-          break
+          throw new Error('I am stuck somehow')
         }
         // await page.screenshot({
         //   path: `data/screen-stories-${i}.png`
@@ -730,12 +760,28 @@ export class FreeFoodScraper {
           throw new Error('Expected to find a story username')
         }
         if (username === lastUsername) {
-          this.#log(`Failed to advance user D: stuck at ${username}`)
-          await page.screenshot({
-            path: 'data/free-food-debug-screenshot.png',
-            fullPage: true
-          })
-          break
+          this.#log(`[stuck] Stuck at ${username}, exiting and reentering...`)
+          if (username === stuckAt) {
+            this.#log(`[stuck] Really stuck at ${username} D:`)
+            await page.screenshot({
+              path: 'data/free-food-debug-screenshot.png',
+              fullPage: true
+            })
+            break
+          }
+          stuckAt = username
+          // just in case
+          lastUsername = ''
+          seenUsernames.clear()
+          await page.keyboard.press('Escape')
+          const target = await this.#scrollStories(page, username)
+          const waitReq = page.waitForRequest(
+            request => new URL(request.url()).pathname === '/graphql/query'
+          )
+          await target.click()
+          await waitReq
+          this.#log('[stuck] We resume')
+          continue
         }
         if (seenUsernames.has(username)) {
           throw new Error(`We seem to have already seen ${username}`)
@@ -846,7 +892,8 @@ export class FreeFoodScraper {
       newPosts: this.#allTimelinePosts.length - oldPosts,
       users: this.#seenUsernames.size,
       stories: totalStories,
-      newStories: totalStories - oldStories
+      newStories: totalStories - oldStories,
+      note: missing.size > 0 ? `Missing: ${[...missing].join(', ')}` : ''
     }
   }
 }
@@ -892,11 +939,11 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
     )}. Next: ${nextTime.toLocaleString('sv-SE')}`
   const scraper = new FreeFoodScraper()
   try {
-    const { inserted, posts, newPosts, stories, newStories, users } =
+    const { inserted, posts, newPosts, stories, newStories, users, note } =
       await scraper.main()
     await notify(
       client,
-      `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users.`,
+      `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users.\n\n${note}`,
       {
         footer: getFooter(),
         file: await fs
@@ -906,7 +953,7 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
       }
     )
   } catch (error) {
-    await notify(client, `\`\`\`\n${scraper.logs.slice(-3000)}\n\`\`\``, {
+    await notify(client, `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``, {
       footer: getFooter()
     })
     await notify(client, `\`\`\`\n${displayError(error)}\n\`\`\``, {
@@ -945,7 +992,7 @@ export async function debugScraper (message: Message): Promise<void> {
   const getFooter = () => `${displayTime(performance.now() - start)} elasped`
   const scraper = new FreeFoodScraper()
   try {
-    const { inserted, posts, newPosts, stories, newStories, users } =
+    const { inserted, posts, newPosts, stories, newStories, users, note } =
       await scraper.main(async () => {
         await message.reply({
           allowedMentions: { repliedUser: false },
@@ -960,7 +1007,7 @@ export async function debugScraper (message: Message): Promise<void> {
     await message.reply({
       embeds: [
         {
-          description: `Saw ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users. ${inserted} new events added.`,
+          description: `Saw ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users. ${inserted} new events added..\n\n${note}`,
           footer: { text: getFooter() }
         }
       ],
@@ -973,7 +1020,7 @@ export async function debugScraper (message: Message): Promise<void> {
     await message.reply({
       embeds: [
         {
-          description: `\`\`\`\n${scraper.logs.slice(-3000)}\n\`\`\``,
+          description: `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``,
           footer: { text: getFooter() }
         }
       ]
