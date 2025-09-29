@@ -606,8 +606,9 @@ export class FreeFoodScraper {
     throw new Error(`Couldn't find ${target} in 50 pages`)
   }
 
-  async main (onBrowserEnd?: () => void): Promise<ScrapeStats> {
+  async main (onBrowserEnd?: (error?: unknown) => void): Promise<ScrapeStats> {
     await fs.rm('data/free-food-debug-screenshot.png', { force: true })
+    let note = ''
 
     const browser = await playwright.firefox.launch()
     const context = await browser.newContext()
@@ -842,34 +843,34 @@ export class FreeFoodScraper {
         await promise
       }
 
+      // Wait for requests to finish
+      await Promise.all(promises)
       await page
         .context()
         .storageState({ path: 'data/free-food-debug-auth.json' })
 
-      // Wait for requests to finish
-      await Promise.all(promises)
+      const missing = this.#expectedUsernames.difference(this.#seenUsernames)
+      const extra = this.#seenUsernames.difference(this.#expectedUsernames)
+      if (missing.size > 0) {
+        this.#log(`Missing story users: ${[...missing].join(', ')}`)
+      }
+      if (extra.size > 0) {
+        throw new Error(`Extra story users: ${[...extra].join(', ')}`)
+      }
+      note += missing.size > 0 ? `Missing: ${[...missing].join(', ')}\n` : ''
+
+      onBrowserEnd?.()
     } catch (error) {
       this.#log('[browser] There was an error! 🚨')
       await page.screenshot({
         path: 'data/free-food-debug-screenshot.png',
         fullPage: true
       })
-      throw error
+      onBrowserEnd?.(error)
     } finally {
       await context.close()
       await browser.close()
       this.#log('[browser] i close the browser')
-    }
-
-    onBrowserEnd?.()
-
-    const missing = this.#expectedUsernames.difference(this.#seenUsernames)
-    const extra = this.#seenUsernames.difference(this.#expectedUsernames)
-    if (missing.size > 0) {
-      this.#log(`Missing story users: ${[...missing].join(', ')}`)
-    }
-    if (extra.size > 0) {
-      throw new Error(`Extra story users: ${[...extra].join(', ')}`)
     }
 
     let total = 0
@@ -912,7 +913,7 @@ export class FreeFoodScraper {
       users: this.#seenUsernames.size,
       stories: totalStories,
       newStories: totalStories - oldStories,
-      note: missing.size > 0 ? `Missing: ${[...missing].join(', ')}` : ''
+      note
     }
   }
 }
@@ -959,7 +960,21 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
   const scraper = new FreeFoodScraper()
   try {
     const { inserted, posts, newPosts, stories, newStories, users, note } =
-      await scraper.main()
+      await scraper.main(async error => {
+        await notify(
+          client,
+          `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``,
+          { footer: getFooter() }
+        )
+        await notify(client, `\`\`\`\n${displayError(error)}\n\`\`\``, {
+          color: 'error',
+          pingOwner: true,
+          file: await fs
+            .stat('data/free-food-debug-screenshot.png')
+            .then(() => 'data/free-food-debug-screenshot.png')
+            .catch(() => undefined)
+        })
+      })
     await notify(
       client,
       `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users.\n\n${note}`,
@@ -977,11 +992,7 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
     })
     await notify(client, `\`\`\`\n${displayError(error)}\n\`\`\``, {
       color: 'error',
-      pingOwner: true,
-      file: await fs
-        .stat('data/free-food-debug-screenshot.png')
-        .then(() => 'data/free-food-debug-screenshot.png')
-        .catch(() => undefined)
+      pingOwner: true
     })
   }
 }
@@ -1012,13 +1023,16 @@ export async function debugScraper (message: Message): Promise<void> {
   const scraper = new FreeFoodScraper()
   try {
     const { inserted, posts, newPosts, stories, newStories, users, note } =
-      await scraper.main(async () => {
+      await scraper.main(async error => {
         await message.reply({
           allowedMentions: { repliedUser: false },
           embeds: [
             {
-              description: `Browser has closed.`,
-              footer: { text: getFooter() }
+              description:
+                `Browser has closed.` +
+                (error ? `\`\`\`\n${displayError(error)}\n\`\`\`` : ''),
+              footer: { text: getFooter() },
+              color: error ? 0xff0000 : undefined
             }
           ]
         })
@@ -1026,7 +1040,7 @@ export async function debugScraper (message: Message): Promise<void> {
     await message.reply({
       embeds: [
         {
-          description: `Saw ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users. ${inserted} new events added..\n\n${note}`,
+          description: `Saw ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users. ${inserted} new events added.\n\n${note}`,
           footer: { text: getFooter() }
         }
       ],
