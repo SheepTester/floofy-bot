@@ -747,15 +747,23 @@ export class FreeFoodScraper {
           this.#log("[browser] We're done with stories! yay")
           break
         }
+        // [...$$('[aria-label="Menu"]')[0].closest('[style*="transform: translate"]').querySelectorAll('[role="link"]')][1].textContent
         const username = await page
           .locator('css=[aria-label="Menu"]')
           .first()
-          .evaluate(
-            menuBtn =>
-              menuBtn
-                .closest('[style*="transform: translate"]')
-                ?.querySelectorAll('[role="link"]')?.[1]?.textContent
-          )
+          .evaluate(menuBtn => {
+            const parent = menuBtn.closest('[style*="transform: translate"]')
+            if (!parent) {
+              this.#log('[username] No translate parent')
+              return null
+            }
+            const usernames = Array.from(
+              parent.querySelectorAll('[role="link"]'),
+              link => link.textContent
+            )
+            this.#log(`[username] Usernames: ${JSON.stringify(usernames)}`)
+            return usernames[1]
+          })
         if (!username) {
           throw new Error('Expected to find a story username')
         }
@@ -831,6 +839,7 @@ export class FreeFoodScraper {
       // Wait for requests to finish
       await Promise.all(promises)
     } catch (error) {
+      this.#log('[browser] There was an error! 🚨')
       await page.screenshot({
         path: 'data/free-food-debug-screenshot.png',
         fullPage: true
