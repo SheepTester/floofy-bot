@@ -139,6 +139,23 @@ type TimelinePostNode = {
     } | null
   } | null
 }
+type StoryUser = {
+  id: string
+  has_besties_media: boolean
+  muted: boolean
+  latest_reel_media: number
+  /** a timestamp(?) or 0 */
+  seen: number
+  expiring_at: number
+  ranked_position: number
+  /** seems to always be the same as `ranked_position`? */
+  seen_ranked_position: number
+  user: {
+    pk: string
+    username: string
+    profile_pic_url: string
+  }
+}
 type GraphQlResponse = {
   data: {
     xdt_api__v1__feed__reels_media__connection?: {
@@ -146,6 +163,9 @@ type GraphQlResponse = {
     }
     xdt_api__v1__feed__timeline__connection?: {
       edges: { node: TimelinePostNode }[]
+    }
+    xdt_api__v1__feed__reels_tray?: {
+      tray: StoryUser[]
     }
   }
 }
@@ -208,6 +228,7 @@ type ScrapedEvent = (
 type ScrapeStats = {
   posts: number
   stories: number
+  users: number
   newPosts: number
   newStories: number
   inserted: number
@@ -251,6 +272,8 @@ const fmt = new Intl.DateTimeFormat('en-US', {
   // omit time or gemini will use the current time for the event :/
 })
 
+const POST_PAGES = isDev ? 2 : 10
+
 let ai: GoogleGenAI | undefined
 let geminiCalls = 0
 let starting = 0
@@ -259,6 +282,8 @@ let geminiReady = Promise.resolve()
 export class FreeFoodScraper {
   #allUserStories: UserStories[] = []
   #allTimelinePosts: TimelinePost[] = []
+  #expectedUsernames = new Set<string>()
+  #seenUsernames = new Set<string>()
   #model: 'gemini-2.0-flash' | 'gemini-2.5-flash' = 'gemini-2.0-flash'
 
   logs = ''
@@ -412,12 +437,14 @@ export class FreeFoodScraper {
       data: {
         xdt_api__v1__feed__reels_media__connection: storyData,
         xdt_api__v1__feed__timeline__connection: timelineData,
+        xdt_api__v1__feed__reels_tray: storyUserData,
         ...rest
       }
     } = response
     if (storyData) {
-      const userStories = storyData.edges.map(
-        ({ node: user }): UserStories => ({
+      const userStories = storyData.edges.map(({ node: user }): UserStories => {
+        this.#seenUsernames.add(user.user.username)
+        return {
           username: user.user.username,
           stories: user.items.map((item): Story => {
             return {
@@ -427,8 +454,8 @@ export class FreeFoodScraper {
               timestamp: new Date(item.taken_at * 1000)
             }
           })
-        })
-      )
+        }
+      })
       this.#allUserStories.push(...userStories)
       this.#log(`[graph ql] found ${userStories.length} stories`)
       return
@@ -457,6 +484,16 @@ export class FreeFoodScraper {
       )
       this.#allTimelinePosts.push(...timelinePosts)
       this.#log(`[graph ql] found ${timelinePosts.length} posts`)
+      return
+    }
+    if (storyUserData) {
+      if (this.#expectedUsernames.size > 0) {
+        throw new Error('Received story usernames twice?')
+      }
+      this.#expectedUsernames = new Set(
+        storyUserData.tray.map(user => user.user.username)
+      )
+      this.#log(`[graph ql] found ${this.#expectedUsernames.size} story users`)
       return
     }
     this.#log(`[graph ql] has no posts/stories: ${Object.keys(rest)[0]}`)
@@ -584,8 +621,11 @@ export class FreeFoodScraper {
           '[browser] No graphql responses received. Something is awry.'
         )
       }
+      if (this.#expectedUsernames.size === 0) {
+        throw new Error('expected some story usernames on page load')
+      }
       this.#log('[browser] Scrolling down posts...')
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < POST_PAGES; i++) {
         await page.keyboard.press('End') // scroll to bottom
         const start = performance.now()
         let done = false
@@ -645,10 +685,12 @@ export class FreeFoodScraper {
       await waitReq
       this.#log('[browser] It seems the stories have opened.')
       await page.waitForTimeout(1000)
+      const seenUsernames = new Set<string>()
+      let lastUsername = ''
       for (let i = 0; ; i++) {
         // NOTE: this might happen when the account follows 200 people (rn it's
         // 131)
-        if (i > 200) {
+        if (i > 500) {
           await page.screenshot({
             path: 'data/free-food-debug-screenshot.png',
             fullPage: true
@@ -675,6 +717,34 @@ export class FreeFoodScraper {
           this.#log("[browser] We're done with stories! yay")
           break
         }
+        const username = await page
+          .locator('css=[aria-label="Menu"]')
+          .first()
+          .evaluate(
+            menuBtn =>
+              menuBtn
+                .closest('[style*="transform: translate"]')
+                ?.querySelectorAll('[role="link"]')?.[1]?.textContent
+          )
+        if (!username) {
+          throw new Error('Expected to find a story username')
+        }
+        if (username === lastUsername) {
+          this.#log(`Failed to advance user D: stuck at ${username}`)
+          await page.screenshot({
+            path: 'data/free-food-debug-screenshot.png',
+            fullPage: true
+          })
+          break
+        }
+        if (seenUsernames.has(username)) {
+          throw new Error(`We seem to have already seen ${username}`)
+        }
+        if (!this.#expectedUsernames.has(username)) {
+          throw new Error(`who tf is ${username}`)
+        }
+        seenUsernames.add(username)
+        lastUsername = username
         const start = performance.now()
         let done = false
         const promise = page
@@ -684,14 +754,16 @@ export class FreeFoodScraper {
           )
           .then(() =>
             this.#log(
-              `[browser] story up ${i + 1}: graphql took ${(
+              `[browser] story up ${i + 1} (${username}): graphql took ${(
                 (performance.now() - start) /
                 1000
               ).toFixed(3)}s`
             )
           )
           .catch(() =>
-            this.#log(`[browser] story up ${i + 1}: no graphql query`)
+            this.#log(
+              `[browser] story up ${i + 1} (${username}): no graphql query`
+            )
           )
           .finally(() => {
             done = true
@@ -705,6 +777,7 @@ export class FreeFoodScraper {
         }
         await promise
       }
+
       await page
         .context()
         .storageState({ path: 'data/free-food-debug-auth.json' })
@@ -724,6 +797,15 @@ export class FreeFoodScraper {
     }
 
     onBrowserEnd?.()
+
+    const missing = this.#expectedUsernames.difference(this.#seenUsernames)
+    const extra = this.#seenUsernames.difference(this.#expectedUsernames)
+    if (missing.size > 0) {
+      this.#log(`Missing story users: ${[...missing].join(', ')}`)
+    }
+    if (extra.size > 0) {
+      throw new Error(`Extra story users: ${[...extra].join(', ')}`)
+    }
 
     let total = 0
     let oldStories = 0
@@ -762,6 +844,7 @@ export class FreeFoodScraper {
       inserted: total,
       posts: this.#allTimelinePosts.length,
       newPosts: this.#allTimelinePosts.length - oldPosts,
+      users: this.#seenUsernames.size,
       stories: totalStories,
       newStories: totalStories - oldStories
     }
@@ -796,7 +879,9 @@ function getNextTime () {
 const displayTime = (milliseconds: number) => {
   const seconds = milliseconds / 1000
   const min = Math.floor(seconds / 60)
-  return `${min}:${(seconds % 60).toFixed(3).padStart('00.000'.length, '0')}`
+  return `${min.toString().padStart(2, '0')}:${(seconds % 60)
+    .toFixed(3)
+    .padStart('00.000'.length, '0')}`
 }
 
 async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
@@ -807,11 +892,11 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
     )}. Next: ${nextTime.toLocaleString('sv-SE')}`
   const scraper = new FreeFoodScraper()
   try {
-    const { inserted, posts, newPosts, stories, newStories } =
+    const { inserted, posts, newPosts, stories, newStories, users } =
       await scraper.main()
     await notify(
       client,
-      `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new).`,
+      `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users.`,
       {
         footer: getFooter(),
         file: await fs
@@ -860,7 +945,7 @@ export async function debugScraper (message: Message): Promise<void> {
   const getFooter = () => `${displayTime(performance.now() - start)} elasped`
   const scraper = new FreeFoodScraper()
   try {
-    const { inserted, posts, newPosts, stories, newStories } =
+    const { inserted, posts, newPosts, stories, newStories, users } =
       await scraper.main(async () => {
         await message.reply({
           allowedMentions: { repliedUser: false },
@@ -875,7 +960,7 @@ export async function debugScraper (message: Message): Promise<void> {
     await message.reply({
       embeds: [
         {
-          description: `Saw ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new). ${inserted} new events added.`,
+          description: `Saw ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users. ${inserted} new events added.`,
           footer: { text: getFooter() }
         }
       ],

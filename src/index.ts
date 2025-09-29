@@ -343,6 +343,7 @@ fs.ensureDir('./data/')
       cmd.freeFood.init(client)
     ])
   )
+  .then(() => console.log('Started!'))
   .catch(err => {
     console.error(err)
     process.exit(1)
