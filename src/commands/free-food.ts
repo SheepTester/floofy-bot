@@ -754,20 +754,26 @@ export class FreeFoodScraper {
           .evaluate(menuBtn => {
             const parent = menuBtn.closest('[style*="transform: translate"]')
             if (!parent) {
-              return null
+              let output = ''
+              let e: SVGElement | HTMLElement | null = menuBtn
+              while (e) {
+                output += `${e.outerHTML.split('>')[0]}\n`
+                e = e.parentElement
+              }
+              return { success: false, output }
             }
             const usernames = Array.from(
               parent.querySelectorAll('[role="link"]'),
               link => link.textContent
             )
-            return usernames
+            return { success: true, usernames }
           })
-        if (usernames === null) {
-          this.#log('[username] No translate parent')
-        } else {
+        if (usernames.success) {
           this.#log(`[username] Usernames: ${JSON.stringify(usernames)}`)
+        } else {
+          this.#log(`[username] No translate parent\n${usernames.output}`)
         }
-        const username = usernames?.[1]
+        const username = usernames.usernames?.[1]
         if (!username) {
           throw new Error('Expected to find a story username')
         }
