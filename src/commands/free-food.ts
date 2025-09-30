@@ -287,6 +287,7 @@ type GeminiModel = 'gemini-2.0-flash' | 'gemini-2.5-flash'
 export class FreeFoodScraper {
   #allUserStories: UserStories[] = []
   #allTimelinePosts: TimelinePost[] = []
+  #expectedUsernameOrder: string[] = []
   #expectedUsernames = new Set<string>()
   #seenUsernames = new Set<string>()
   #model: GeminiModel = 'gemini-2.0-flash'
@@ -505,6 +506,9 @@ export class FreeFoodScraper {
       this.#expectedUsernames = new Set(
         storyUserData.tray.map(user => user.user.username)
       )
+      this.#expectedUsernameOrder = storyUserData.tray
+        .toSorted((a, b) => a.ranked_position - b.ranked_position)
+        .map(user => user.user.username)
       this.#log(`[graph ql] found ${this.#expectedUsernames.size} story users`)
       return
     }
@@ -752,6 +756,7 @@ export class FreeFoodScraper {
       const seenUsernames = new Set<string>()
       let lastUsername: string | null = null
       let stuckAt: string | null = null
+      let stucks = 0
       for (let i = 0; ; i++) {
         if (i > 500) {
           throw new Error('I am stuck somehow')
@@ -802,19 +807,27 @@ export class FreeFoodScraper {
         } else {
           this.#log(`[username] No translate parent\n${usernames.output}`)
         }
-        const username = usernames.usernames?.[1]
+        let username = usernames.usernames?.[1]
         if (!username) {
           throw new Error('Expected to find a story username')
         }
         if (username === lastUsername) {
           this.#log(`[stuck] Stuck at ${username}, exiting and reentering...`)
           if (username === stuckAt) {
-            this.#log(`[stuck] Really stuck at ${username} D:`)
-            await page.screenshot({
-              path: 'data/free-food-debug-screenshot.png',
-              fullPage: true
-            })
-            break
+            stucks++
+            if (stucks > 3) {
+              this.#log(`[stuck] Really stuck at ${username} D:`)
+              await page.screenshot({
+                path: 'data/free-food-debug-screenshot.png',
+                fullPage: true
+              })
+              break
+            }
+            // Move on to the next username /shrug
+            username =
+              this.#expectedUsernameOrder[
+                this.#expectedUsernameOrder.indexOf(username) - 1
+              ]
           }
           stuckAt = username
           // just in case
