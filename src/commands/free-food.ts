@@ -585,9 +585,16 @@ export class FreeFoodScraper {
     target?: string
   ): Promise<playwright.Locator> {
     // Make sure the story tray is visible
-    await page
+    let done = false
+    const promise = page
       .locator('css=[data-pagelet="story_tray"]')
       .waitFor({ timeout: 1000 })
+      .catch(() => {})
+      .then(() => (done = true))
+    while (!done) {
+      await page.keyboard.press('Escape')
+    }
+    await promise
     const seenUsernames = new Set<string>()
     try {
       while (true) {
@@ -606,11 +613,13 @@ export class FreeFoodScraper {
         }
       }
     } catch (error) {
-      this.#log(
-        `[scroll] Failed to find next story row page button. We're at the end!: ${displayError(
-          error
-        )}`
-      )
+      if (error instanceof Error && error.message.includes('ms exceeded.')) {
+        this.#log(
+          "[scroll] Failed to find next story row page button. We're at the end!"
+        )
+      } else {
+        throw error
+      }
     }
     const missing = this.#expectedUsernames.difference(seenUsernames)
     const extra = seenUsernames.difference(this.#expectedUsernames)
@@ -885,16 +894,24 @@ export class FreeFoodScraper {
         await promise
       }
 
-      const missing = this.#expectedUsernames.difference(this.#seenUsernames)
-      if (missing.size > 0) {
-        this.#log(`[missing] Missing story users: ${[...missing].join(', ')}`)
-      }
-      for (const username of [...missing]) {
+      const tried = new Set<string>()
+      while (true) {
+        // Calculate missing each time because we might mark more than just
+        // `username` was read
+        const missing = this.#expectedUsernames.difference(this.#seenUsernames)
+        const username = Array.from(missing).find(
+          username => !tried.has(username)
+        )
+        if (!username) {
+          break
+        }
+        tried.add(username)
         try {
           const target = await this.#scrollStories(page, username)
           await target.click()
           await page.locator('css=[aria-label="Close"]').waitFor()
           await page.keyboard.press('Escape')
+          await page.waitForTimeout(500 + Math.random() * 500)
           this.#log(`[missing] Successfully read ${username}`)
         } catch (error) {
           if (
@@ -904,6 +921,9 @@ export class FreeFoodScraper {
             this.#log(
               `[missing] Failed to read ${username}: ${displayError(error)}`
             )
+            await page.screenshot({
+              path: 'data/free-food-debug-screenshot.png'
+            })
             continue
           }
           throw error
