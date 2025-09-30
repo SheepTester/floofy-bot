@@ -841,7 +841,7 @@ export class FreeFoodScraper {
           continue
         }
         if (seenUsernames.has(username)) {
-          throw new Error(`We seem to have already seen ${username}`)
+          this.#log(`[username] We seem to have already seen ${username}`)
         }
         if (!this.#expectedUsernames.has(username)) {
           throw new Error(`who tf is ${username}`)
