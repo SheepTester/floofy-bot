@@ -229,10 +229,12 @@ type ScrapeStats = {
   posts: number
   stories: number
   users: number
+  note: string
+}
+type InsertStats = ScrapeStats & {
   newPosts: number
   newStories: number
   inserted: number
-  note: string
 }
 
 /**
@@ -280,12 +282,14 @@ let geminiCalls = 0
 let starting = 0
 let geminiReady = Promise.resolve()
 
+type GeminiModel = 'gemini-2.0-flash' | 'gemini-2.5-flash'
+
 export class FreeFoodScraper {
   #allUserStories: UserStories[] = []
   #allTimelinePosts: TimelinePost[] = []
   #expectedUsernames = new Set<string>()
   #seenUsernames = new Set<string>()
-  #model: 'gemini-2.0-flash' | 'gemini-2.5-flash' = 'gemini-2.0-flash'
+  #model: GeminiModel = 'gemini-2.0-flash'
 
   logs = ''
 
@@ -405,18 +409,25 @@ export class FreeFoodScraper {
             timeout = +match[1] + 5
           }
           if (
-            error.message.includes('GenerateRequestsPerDayPerProjectPerModel')
+            error.message.includes(
+              'GenerateRequestsPerDayPerProjectPerModel'
+            ) ||
+            error.message.includes('The model is overloaded.')
           ) {
-            if (this.#model === 'gemini-2.0-flash') {
-              this.#model = 'gemini-2.5-flash'
-              this.#log(
-                `[gemini] 2.0 flash ratelimit reached, switching to 2.5 flash`
-              )
-            } else {
-              throw new Error(
-                'Doomed. All the models I hardcoded into the bot have run out of daily quota.'
-              )
-            }
+            const nextModel: GeminiModel =
+              this.#model === 'gemini-2.0-flash'
+                ? 'gemini-2.5-flash'
+                : 'gemini-2.0-flash'
+            this.#log(
+              `[gemini] ${this.#model} ${
+                error.message.includes(
+                  'GenerateRequestsPerDayPerProjectPerModel'
+                )
+                  ? 'ratelimit reached'
+                  : 'overloaded'
+              }, switching to ${nextModel}`
+            )
+            this.#model = nextModel
           }
         }
         this.#log(
@@ -569,19 +580,37 @@ export class FreeFoodScraper {
     page: Page,
     target?: string
   ): Promise<playwright.Locator> {
+    const seenUsernames = new Set<string>()
     try {
       while (true) {
         await page
           .locator('css=[data-pagelet="story_tray"] [aria-label="Next"]')
-          .click({ timeout: 100 })
+          .click({ timeout: 1000 })
         await page.waitForTimeout(100 + Math.random() * 400)
+        for (const username of await page
+          .locator('css=[aria-label^="Story by"]')
+          .evaluateAll(stories =>
+            stories
+              .map(elem => elem.ariaLabel?.split(',')[0]?.split(' ').at(-1))
+              .filter(x => x !== undefined)
+          )) {
+          seenUsernames.add(username)
+        }
       }
     } catch (error) {
       this.#log(
-        `Failed to find next story row page button. We're at the end!: ${displayError(
+        `[scroll] Failed to find next story row page button. We're at the end!: ${displayError(
           error
         )}`
       )
+    }
+    const missing = this.#expectedUsernames.difference(seenUsernames)
+    const extra = seenUsernames.difference(this.#expectedUsernames)
+    if (missing.size > 0) {
+      console.log(`[scroll] missing: ${Array.from(missing).join(', ')}`)
+    }
+    if (extra.size > 0) {
+      console.log(`[scroll] extra: ${Array.from(extra).join(', ')}`)
     }
     if (!target) {
       return page.locator('css=[aria-label^="Story by"]').last()
@@ -600,13 +629,15 @@ export class FreeFoodScraper {
       }
       await page
         .locator('css=[data-pagelet="story_tray"] [aria-label="Go back"]')
-        .click({ timeout: 100 })
+        .click({ timeout: 1000 })
       await page.waitForTimeout(100 + Math.random() * 400)
     }
     throw new Error(`Couldn't find ${target} in 50 pages`)
   }
 
-  async main (onBrowserEnd?: (error?: unknown) => void): Promise<ScrapeStats> {
+  async main (
+    onBrowserEnd?: (error: unknown | undefined, stats: ScrapeStats) => void
+  ): Promise<InsertStats> {
     await fs.rm('data/free-food-debug-screenshot.png', { force: true })
     let note = ''
 
@@ -711,14 +742,11 @@ export class FreeFoodScraper {
       // downside:
       // - will include already-read stories
       const target = await this.#scrollStories(page)
-      const waitReq = page.waitForRequest(
-        request => new URL(request.url()).pathname === '/graphql/query'
-      )
       // it might make the request immediately while clicking so need to wait
       // for request before click :/
       await target.click()
-      this.#log('[browser] Reading stories from end...')
-      await waitReq
+      // wait for stories close button
+      await page.locator('css=[aria-label="Close"]').waitFor()
       this.#log('[browser] It seems the stories have opened.')
       await page.waitForTimeout(1000)
       const seenUsernames = new Set<string>()
@@ -794,11 +822,8 @@ export class FreeFoodScraper {
           seenUsernames.clear()
           await page.keyboard.press('Escape')
           const target = await this.#scrollStories(page, username)
-          const waitReq = page.waitForRequest(
-            request => new URL(request.url()).pathname === '/graphql/query'
-          )
           await target.click()
-          await waitReq
+          await page.locator('css=[aria-label="Close"]').waitFor()
           this.#log('[stuck] We resume')
           continue
         }
@@ -843,30 +868,54 @@ export class FreeFoodScraper {
         await promise
       }
 
+      const missing = this.#expectedUsernames.difference(this.#seenUsernames)
+      if (missing.size > 0) {
+        this.#log(`[missing] Missing story users: ${[...missing].join(', ')}`)
+      }
+      for (const username of [...missing]) {
+        try {
+          const target = await this.#scrollStories(page, username)
+          await target.click()
+          await page.locator('css=[aria-label="Close"]').waitFor()
+          await page.keyboard.press('Escape')
+          this.#log(`[missing] Successfully read ${username}`)
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            error.message.includes('ms exceeded.')
+          ) {
+            continue
+          }
+          throw error
+        }
+      }
+
       // Wait for requests to finish
       await Promise.all(promises)
       await page
         .context()
         .storageState({ path: 'data/free-food-debug-auth.json' })
 
-      const missing = this.#expectedUsernames.difference(this.#seenUsernames)
+      const missing2 = this.#expectedUsernames.difference(this.#seenUsernames)
       const extra = this.#seenUsernames.difference(this.#expectedUsernames)
-      if (missing.size > 0) {
-        this.#log(`Missing story users: ${[...missing].join(', ')}`)
+      if (missing2.size > 0) {
+        this.#log(
+          `[missing] Still missing story users: ${[...missing2].join(', ')}`
+        )
       }
       if (extra.size > 0) {
         throw new Error(`Extra story users: ${[...extra].join(', ')}`)
       }
-      note += missing.size > 0 ? `Missing: ${[...missing].join(', ')}\n` : ''
+      note += missing2.size > 0 ? `Missing: ${[...missing2].join(', ')}\n` : ''
 
-      onBrowserEnd?.()
+      onBrowserEnd?.(undefined, { ...this.#stats(), note })
     } catch (error) {
       this.#log('[browser] There was an error! 🚨')
       await page.screenshot({
         path: 'data/free-food-debug-screenshot.png',
         fullPage: true
       })
-      onBrowserEnd?.(error)
+      onBrowserEnd?.(error, { ...this.#stats(), note })
     } finally {
       await context.close()
       await browser.close()
@@ -902,18 +951,25 @@ export class FreeFoodScraper {
     }
 
     this.#log('[insert] ok gamers we done')
+    const stats = this.#stats()
+    return {
+      ...stats,
+      inserted: total,
+      newPosts: this.#allTimelinePosts.length - oldPosts,
+      newStories: stats.stories - oldStories,
+      note
+    }
+  }
+
+  #stats (): Omit<ScrapeStats, 'note'> {
     const totalStories = this.#allUserStories.reduce(
       (cum, curr) => cum + curr.stories.length,
       0
     )
     return {
-      inserted: total,
       posts: this.#allTimelinePosts.length,
-      newPosts: this.#allTimelinePosts.length - oldPosts,
       users: this.#seenUsernames.size,
-      stories: totalStories,
-      newStories: totalStories - oldStories,
-      note
+      stories: totalStories
     }
   }
 }
@@ -959,33 +1015,29 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
     )}. Next: ${nextTime.toLocaleString('sv-SE')}`
   const scraper = new FreeFoodScraper()
   try {
-    const { inserted, posts, newPosts, stories, newStories, users, note } =
-      await scraper.main(async error => {
-        await notify(
-          client,
-          `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``,
-          { footer: getFooter() }
-        )
-        await notify(client, `\`\`\`\n${displayError(error)}\n\`\`\``, {
-          color: 'error',
-          pingOwner: true,
-          file: await fs
-            .stat('data/free-food-debug-screenshot.png')
-            .then(() => 'data/free-food-debug-screenshot.png')
-            .catch(() => undefined)
-        })
+    const stats = await scraper.main(async error => {
+      if (!error) {
+        return
+      }
+      await notify(client, `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``, {
+        footer: getFooter()
       })
-    await notify(
-      client,
-      `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users.\n\n${note}`,
-      {
-        footer: getFooter(),
+      await notify(client, `\`\`\`\n${displayError(error)}\n\`\`\``, {
+        color: 'error',
+        pingOwner: true,
         file: await fs
           .stat('data/free-food-debug-screenshot.png')
           .then(() => 'data/free-food-debug-screenshot.png')
           .catch(() => undefined)
-      }
-    )
+      })
+    })
+    await notify(client, displayInsertStats(stats), {
+      footer: getFooter(),
+      file: await fs
+        .stat('data/free-food-debug-screenshot.png')
+        .then(() => 'data/free-food-debug-screenshot.png')
+        .catch(() => undefined)
+    })
   } catch (error) {
     await notify(client, `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``, {
       footer: getFooter()
@@ -1022,25 +1074,34 @@ export async function debugScraper (message: Message): Promise<void> {
   const getFooter = () => `${displayTime(performance.now() - start)} elasped`
   const scraper = new FreeFoodScraper()
   try {
-    const { inserted, posts, newPosts, stories, newStories, users, note } =
-      await scraper.main(async error => {
+    const stats = await scraper.main(async (error, stats) => {
+      if (error) {
         await message.reply({
           allowedMentions: { repliedUser: false },
           embeds: [
             {
-              description:
-                `Browser has closed.` +
-                (error ? `\`\`\`\n${displayError(error)}\n\`\`\`` : ''),
-              footer: { text: getFooter() },
-              color: error ? 0xff0000 : undefined
+              description: `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``,
+              footer: { text: getFooter() }
             }
           ]
         })
+      }
+      await message.reply({
+        embeds: [
+          {
+            description:
+              `Browser has closed. ${displayScrapeStats(stats)}` +
+              (error ? `\`\`\`\n${displayError(error)}\n\`\`\`` : ''),
+            footer: { text: getFooter() },
+            color: error ? 0xff0000 : undefined
+          }
+        ]
       })
+    })
     await message.reply({
       embeds: [
         {
-          description: `Saw ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users. ${inserted} new events added.\n\n${note}`,
+          description: displayInsertStats(stats),
           footer: { text: getFooter() }
         }
       ],
@@ -1051,6 +1112,7 @@ export async function debugScraper (message: Message): Promise<void> {
     })
   } catch (error) {
     await message.reply({
+      allowedMentions: { repliedUser: false },
       embeds: [
         {
           description: `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``,
@@ -1072,3 +1134,17 @@ export async function debugScraper (message: Message): Promise<void> {
     })
   }
 }
+
+const displayInsertStats = ({
+  inserted,
+  newPosts,
+  newStories,
+  note,
+  posts,
+  stories,
+  users
+}: InsertStats) =>
+  `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users.\n\n${note}`
+
+const displayScrapeStats = ({ note, posts, stories, users }: ScrapeStats) =>
+  `Scraped ${stories} stories from ${users} users and ${posts} posts.\n\n${note}`
