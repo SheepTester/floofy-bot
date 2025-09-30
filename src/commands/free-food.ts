@@ -584,6 +584,10 @@ export class FreeFoodScraper {
     page: Page,
     target?: string
   ): Promise<playwright.Locator> {
+    // Make sure the story tray is visible
+    await page
+      .locator('css=[data-pagelet="story_tray"]')
+      .waitFor({ timeout: 1000 })
     const seenUsernames = new Set<string>()
     try {
       while (true) {
