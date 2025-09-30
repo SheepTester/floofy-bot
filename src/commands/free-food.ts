@@ -884,6 +884,9 @@ export class FreeFoodScraper {
             error instanceof Error &&
             error.message.includes('ms exceeded.')
           ) {
+            this.#log(
+              `[missing] Failed to read ${username}: ${displayError(error)}`
+            )
             continue
           }
           throw error
@@ -899,7 +902,7 @@ export class FreeFoodScraper {
       const missing2 = this.#expectedUsernames.difference(this.#seenUsernames)
       const extra = this.#seenUsernames.difference(this.#expectedUsernames)
       if (missing2.size > 0) {
-        this.#log(
+        throw new Error(
           `[missing] Still missing story users: ${[...missing2].join(', ')}`
         )
       }
