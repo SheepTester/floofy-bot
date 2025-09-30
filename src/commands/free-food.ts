@@ -726,7 +726,7 @@ export class FreeFoodScraper {
             // await page.screenshot({ path: `data/no-graphql-query-${i + 1}.png` })
             // await page.screenshot({
             //   path: `data/no-graphql-query-${i + 1}-full.png`,
-            //   fullPage: true
+            // fullPage: true
             // })
           })
           .finally(() => {
@@ -763,7 +763,7 @@ export class FreeFoodScraper {
         }
         // await page.screenshot({
         //   path: `data/screen-stories-${i}.png`
-        //   // fullPage: true
+        // fullPage: true
         // })
         let story = page.locator('css=a[href^="/stories/"]')
         // click first visible story
@@ -818,8 +818,8 @@ export class FreeFoodScraper {
             if (stucks > 3) {
               this.#log(`[stuck] Really stuck at ${username} D:`)
               await page.screenshot({
-                path: 'data/free-food-debug-screenshot.png',
-                fullPage: true
+                path: 'data/free-food-debug-screenshot.png'
+                // fullPage: true
               })
               break
             }
@@ -928,8 +928,8 @@ export class FreeFoodScraper {
     } catch (error) {
       this.#log('[browser] There was an error! 🚨')
       await page.screenshot({
-        path: 'data/free-food-debug-screenshot.png',
-        fullPage: true
+        path: 'data/free-food-debug-screenshot.png'
+        // fullPage: true
       })
       onBrowserEnd?.(error, { ...this.#stats(), note })
     } finally {
