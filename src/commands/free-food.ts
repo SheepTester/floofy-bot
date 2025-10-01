@@ -287,6 +287,7 @@ type GeminiModel = 'gemini-2.0-flash' | 'gemini-2.5-flash'
 export class FreeFoodScraper {
   #allUserStories: UserStories[] = []
   #allTimelinePosts: TimelinePost[] = []
+  #expectedUsernameRaw: StoryUser[] = []
   #expectedUsernameOrder: string[] = []
   #expectedUsernames = new Set<string>()
   #seenUsernames = new Set<string>()
@@ -506,9 +507,12 @@ export class FreeFoodScraper {
       this.#expectedUsernames = new Set(
         storyUserData.tray.map(user => user.user.username)
       )
-      this.#expectedUsernameOrder = storyUserData.tray
-        .toSorted((a, b) => a.ranked_position - b.ranked_position)
-        .map(user => user.user.username)
+      this.#expectedUsernameRaw = storyUserData.tray.toSorted(
+        (a, b) => a.ranked_position - b.ranked_position
+      )
+      this.#expectedUsernameOrder = this.#expectedUsernameRaw.map(
+        u => u.user.username
+      )
       this.#log(`[graph ql] found ${this.#expectedUsernames.size} story users`)
       return
     }
@@ -835,10 +839,35 @@ export class FreeFoodScraper {
         }
         if (i === 0) {
           // This is the first username
-          if (username !== this.#expectedUsernameOrder.at(-1)) {
-            note += `We didn't go to the end. We went to ${username} but the last story was ${this.#expectedUsernameOrder.at(
-              -1
-            )}.\n`
+          const {
+            seen: ls,
+            ranked_position: lrp,
+            seen_ranked_position: lsrp,
+            latest_reel_media: llrm,
+            user: { username: lu }
+          } = this.#expectedUsernameRaw[this.#expectedUsernameRaw.length - 1]
+          if (username !== lu) {
+            const index = this.#expectedUsernameRaw.findIndex(
+              user => user.user.username === username
+            )
+            const {
+              seen,
+              ranked_position,
+              seen_ranked_position,
+              latest_reel_media
+            } = this.#expectedUsernameRaw[index]
+            const {
+              seen: ns,
+              ranked_position: nrp,
+              seen_ranked_position: nsrp,
+              latest_reel_media: nlrm,
+              user: { username: nu }
+            } = this.#expectedUsernameRaw[index + 1]
+            note += `We didn't go to the end. We went to ${username} (#${index}, ${seen} vs ${latest_reel_media}, ${ranked_position} = ${seen_ranked_position}) but the last story was ${lu} (#${
+              this.#expectedUsernameRaw.length - 1
+            }, ${ls} vs ${llrm}, ${lrp} = ${lsrp}). Story after is ${nu} (#${
+              index + 1
+            }, ${ns} vs ${nlrm}, ${nrp} = ${nsrp}).\n`
           }
         }
         if (username === lastUsername) {
