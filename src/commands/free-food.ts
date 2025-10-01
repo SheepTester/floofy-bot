@@ -630,6 +630,8 @@ export class FreeFoodScraper {
       console.log(`[scroll] extra: ${Array.from(extra).join(', ')}`)
     }
     if (!target) {
+      // wait for scroll animation to finish
+      await page.waitForTimeout(1000)
       return page.locator('css=[aria-label^="Story by"]').last()
     }
     // tbh this for loop is not necessary because page.locator will fail when it
@@ -797,21 +799,24 @@ export class FreeFoodScraper {
         // [...$$('[aria-label="Menu"]')[0].closest('[style*="transform: translate"]').querySelectorAll('[role="link"]')][1].textContent
         const usernames = await page
           .locator('css=[aria-label="Menu"]')
-          .evaluateAll(menuBtns => {
-            if (menuBtns.length === 0) {
-              return { success: false, output: 'No menu buttons' }
-            }
-            const parent = menuBtns
-              .map(btn => btn.closest('[style*="transform: translate"]'))
-              .filter(w => w)[0]
+          .first()
+          .evaluate(menuBtn => {
+            let parent = menuBtn.closest('[style*="transform: translate"]')
             if (!parent) {
               let output = ''
-              let e: SVGElement | HTMLElement | null = menuBtns[0]
-              while (e) {
+              let e: SVGElement | HTMLElement = menuBtn
+              while (e.parentElement) {
                 output += `${e.outerHTML.split('>')[0]}\n`
                 e = e.parentElement
               }
-              return { success: false, output }
+              if (e.tagName === 'DIV') {
+                // div has no parent. that means the tree got removed from the
+                // DOM. that's fine, we will just use this div as the parent
+                // then
+                parent = e
+              } else {
+                return { success: false, output }
+              }
             }
             const usernames = Array.from(
               parent.querySelectorAll('[role="link"]'),
@@ -827,6 +832,14 @@ export class FreeFoodScraper {
         let username = usernames.usernames?.[1]
         if (!username) {
           throw new Error('Expected to find a story username')
+        }
+        if (i === 0) {
+          // This is the first username
+          if (username !== this.#expectedUsernameOrder.at(-1)) {
+            note += `We didn't go to the end. We went to ${username} but the last story was ${this.#expectedUsernameOrder.at(
+              -1
+            )}.\n`
+          }
         }
         if (username === lastUsername) {
           this.#log(`[stuck] Stuck at ${username}, exiting and reentering...`)
