@@ -650,9 +650,15 @@ export class FreeFoodScraper {
       if (count > 1) {
         throw new Error(`Found multiple for ${target}`)
       }
-      await page
+      let done = false
+      const promise = page
         .locator('css=[data-pagelet="story_tray"] [aria-label="Go back"]')
         .click({ timeout: 1000 })
+        .finally(() => (done = true))
+      while (!done) {
+        await page.keyboard.press('Escape')
+      }
+      await promise
       await page.waitForTimeout(100 + Math.random() * 400)
     }
     throw new Error(`Couldn't find ${target} in 50 pages`)
@@ -771,6 +777,7 @@ export class FreeFoodScraper {
       // wait for stories close button
       await page.locator('css=[aria-label="Close"]').waitFor()
       this.#log('[browser] It seems the stories have opened.')
+      await page.keyboard.press(' ') // pause story
       await page.waitForTimeout(1000)
       const seenUsernames = new Set<string>()
       let lastUsername: string | null = null
@@ -863,11 +870,19 @@ export class FreeFoodScraper {
               latest_reel_media: nlrm,
               user: { username: nu }
             } = this.#expectedUsernameRaw[index + 1]
-            note += `We didn't go to the end. We went to ${username} (#${index}, ${seen} vs ${latest_reel_media}, ${ranked_position} = ${seen_ranked_position}) but the last story was ${lu} (#${
+            const addNote = `[first] We didn't go to the end. We went to ${username} (#${index}, ${seen} vs ${latest_reel_media}, ${ranked_position} = ${seen_ranked_position}) but the last story was ${lu} (#${
               this.#expectedUsernameRaw.length - 1
             }, ${ls} vs ${llrm}, ${lrp} = ${lsrp}). Story after is ${nu} (#${
               index + 1
             }, ${ns} vs ${nlrm}, ${nrp} = ${nsrp}).\n`
+            this.#log(addNote)
+            note += addNote
+          } else {
+            this.#log(
+              `[first] We're starting at the last story user, ${this.#expectedUsernameOrder.at(
+                -1
+              )}!`
+            )
           }
         }
         if (username === lastUsername) {
@@ -907,6 +922,9 @@ export class FreeFoodScraper {
         }
         seenUsernames.add(username)
         lastUsername = username
+        const desc = `story up ${
+          i + 1
+        } (${username} #${this.#expectedUsernameOrder.indexOf(username)})`
         const start = performance.now()
         let done = false
         const promise = page
@@ -916,17 +934,13 @@ export class FreeFoodScraper {
           )
           .then(() =>
             this.#log(
-              `[browser] story up ${i + 1} (${username}): graphql took ${(
+              `[browser] ${desc}: graphql took ${(
                 (performance.now() - start) /
                 1000
               ).toFixed(3)}s`
             )
           )
-          .catch(() =>
-            this.#log(
-              `[browser] story up ${i + 1} (${username}): no graphql query`
-            )
-          )
+          .catch(() => this.#log(`[browser] ${desc}: no graphql query`))
           .finally(() => {
             done = true
           })
