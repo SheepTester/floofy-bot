@@ -604,7 +604,7 @@ export class FreeFoodScraper {
       while (true) {
         await page
           .locator('css=[data-pagelet="story_tray"] [aria-label="Next"]')
-          .click({ timeout: 1000 })
+          .click({ timeout: 5000 })
         await page.waitForTimeout(100 + Math.random() * 400)
         for (const username of await page
           .locator('css=[aria-label^="Story by"]')
@@ -653,8 +653,8 @@ export class FreeFoodScraper {
       let done = false
       const promise = page
         .locator('css=[data-pagelet="story_tray"] [aria-label="Go back"]')
-        .click({ timeout: 1000 })
-        .finally(() => (done = true))
+        .click({ timeout: 5000 })
+      promise.finally(() => (done = true))
       while (!done) {
         await page.keyboard.press('Escape')
       }
