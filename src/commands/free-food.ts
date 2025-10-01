@@ -615,7 +615,7 @@ export class FreeFoodScraper {
     } catch (error) {
       if (error instanceof Error && error.message.includes('ms exceeded.')) {
         this.#log(
-          "[scroll] Failed to find next story row page button. We're at the end!"
+          "[scroll] We're at the end: there's no next story row page button!!"
         )
       } else {
         throw error
@@ -797,12 +797,16 @@ export class FreeFoodScraper {
         // [...$$('[aria-label="Menu"]')[0].closest('[style*="transform: translate"]').querySelectorAll('[role="link"]')][1].textContent
         const usernames = await page
           .locator('css=[aria-label="Menu"]')
-          .first()
-          .evaluate(menuBtn => {
-            const parent = menuBtn.closest('[style*="transform: translate"]')
+          .evaluateAll(menuBtns => {
+            if (menuBtns.length === 0) {
+              return { success: false, output: 'No menu buttons' }
+            }
+            const parent = menuBtns
+              .map(btn => btn.closest('[style*="transform: translate"]'))
+              .filter(w => w)[0]
             if (!parent) {
               let output = ''
-              let e: SVGElement | HTMLElement | null = menuBtn
+              let e: SVGElement | HTMLElement | null = menuBtns[0]
               while (e) {
                 output += `${e.outerHTML.split('>')[0]}\n`
                 e = e.parentElement
@@ -811,7 +815,7 @@ export class FreeFoodScraper {
             }
             const usernames = Array.from(
               parent.querySelectorAll('[role="link"]'),
-              link => link.textContent
+              link => link.textContent.replace(/Verified$/, '')
             )
             return { success: true, usernames }
           })
