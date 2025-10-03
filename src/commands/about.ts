@@ -12,7 +12,9 @@ export async function about (message: Message): Promise<void> {
           'whomst',
           'who i am',
           'introduction',
-          'hi hi'
+          'hi hi',
+          'moofy lore',
+          'what is a "moofy" ?'
         ]),
         description: [
           select([
