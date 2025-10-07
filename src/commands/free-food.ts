@@ -1014,7 +1014,7 @@ export class FreeFoodScraper {
       await page.screenshot({
         path: 'data/free-food-debug-screenshot.png'
         // fullPage: true
-      })
+      }).catch(error => this.#log(`[browser] error screenshotting error screenshot: ${error instanceof Error ? error.message : error}`))
       onBrowserEnd?.(error, { ...this.#stats(), note })
     } finally {
       await context.close()
