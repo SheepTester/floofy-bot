@@ -1010,13 +1010,14 @@ export class FreeFoodScraper {
 
       onBrowserEnd?.(undefined, { ...this.#stats(), note })
     } catch (error) {
-      this.#log('[browser] There was an error! 🚨')
+      this.#log(`[browser] There was an error! 🚨 ${page.isClosed() ? 'page closed' : 'page still open'}`)
       await page.screenshot({
         path: 'data/free-food-debug-screenshot.png'
         // fullPage: true
       }).catch(error => this.#log(`[browser] error screenshotting error screenshot: ${error instanceof Error ? error.message : error}`))
       onBrowserEnd?.(error, { ...this.#stats(), note })
     } finally {
+      this.#log(`[browser] closing browser. ${page.isClosed() ? 'page already closed ??' : 'page still open'}`)
       await context.close()
       await browser.close()
       this.#log('[browser] i close the browser')
