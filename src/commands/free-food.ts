@@ -310,6 +310,10 @@ export class FreeFoodScraper {
     }
   }
 
+  #getUsernameScrapeStatus (): string {
+    return `\`${this.#expectedUsernameOrder.map(username => this.#seenUsernames.has(username) ? '.' : '!').join('')}\` (${this.#seenUsernames.size}/${this.#expectedUsernameOrder.length})`
+  }
+
   async #fetchImage (url: string, retries = 0): Promise<ArrayBuffer> {
     try {
       const response = await fetch(url).catch(error => {
@@ -687,6 +691,8 @@ export class FreeFoodScraper {
       }))
     )
     const page = await context.newPage()
+    page.on('close', () => this.#log('[page] CLOSED'))
+    page.on('crash', () => this.#log('[page] CRASHED'))
 
     const promises: Promise<void>[] = []
     try {
@@ -1008,20 +1014,22 @@ export class FreeFoodScraper {
       }
       note += missing2.size > 0 ? `Missing: ${[...missing2].join(', ')}\n` : ''
 
-      onBrowserEnd?.(undefined, { ...this.#stats(), note })
+      onBrowserEnd?.(undefined, { ...this.#stats(), note: note + this.#getUsernameScrapeStatus() })
     } catch (error) {
       this.#log(`[browser] There was an error! 🚨 ${page.isClosed() ? 'page closed' : 'page still open'}`)
       await page.screenshot({
         path: 'data/free-food-debug-screenshot.png'
         // fullPage: true
       }).catch(error => this.#log(`[browser] error screenshotting error screenshot: ${error instanceof Error ? error.message : error}`))
-      onBrowserEnd?.(error, { ...this.#stats(), note })
+      onBrowserEnd?.(error, { ...this.#stats(), note: note + this.#getUsernameScrapeStatus() })
     } finally {
       this.#log(`[browser] closing browser. ${page.isClosed() ? 'page already closed ??' : 'page still open'}`)
       await context.close()
       await browser.close()
       this.#log('[browser] i close the browser')
     }
+
+    await Promise.allSettled(promises).catch(() => {})
 
     let total = 0
     let oldStories = 0
