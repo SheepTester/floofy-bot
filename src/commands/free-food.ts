@@ -771,6 +771,8 @@ export class FreeFoodScraper {
         await promise
       }
       await page.keyboard.press('Home')
+      await page.requestGC() // probably does nothing since Instagram normally uses like 400 MB memory
+      await page.keyboard.press('Home')
       // scroll to end has several benefits:
       // - no ads
       // - will include already-read stories
