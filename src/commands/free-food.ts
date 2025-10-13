@@ -1016,14 +1016,16 @@ export class FreeFoodScraper {
       }
       note += missing2.size > 0 ? `Missing: ${[...missing2].join(', ')}\n` : ''
 
-      onBrowserEnd?.(undefined, { ...this.#stats(), note: note + this.#getUsernameScrapeStatus() })
+      note += this.#getUsernameScrapeStatus()
+      onBrowserEnd?.(undefined, { ...this.#stats(), note })
     } catch (error) {
       this.#log(`[browser] There was an error! 🚨 ${page.isClosed() ? 'page closed' : 'page still open'}`)
       await page.screenshot({
         path: 'data/free-food-debug-screenshot.png'
         // fullPage: true
       }).catch(error => this.#log(`[browser] error screenshotting error screenshot: ${error instanceof Error ? error.message : error}`))
-      onBrowserEnd?.(error, { ...this.#stats(), note: note + this.#getUsernameScrapeStatus() })
+      note += this.#getUsernameScrapeStatus()
+      onBrowserEnd?.(error, { ...this.#stats(), note })
     } finally {
       this.#log(`[browser] closing browser. ${page.isClosed() ? 'page already closed ??' : 'page still open'}`)
       await context.close()
