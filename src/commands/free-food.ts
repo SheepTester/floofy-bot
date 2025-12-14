@@ -229,6 +229,7 @@ type ScrapeStats = {
   posts: number
   stories: number
   users: number
+  totalUsers: number
   note: string
 }
 type InsertStats = ScrapeStats & {
@@ -268,6 +269,51 @@ const schemaPrompt = `output only a JSON array of event objects without any expl
   "start": { "hour": number; "minute": number }, // 24-hour format. Tip: something like "6-9 pm" is the same as "6 pm to 9 pm"
   "end": { "hour": number; "minute": number } // 24-hour format, optional and omitted if no end time specified
 }`
+const responseJsonSchema = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      provided: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'List of tangible items (i.e. food and merch) provided at the event, if any, using the original phrasing from the post (e.g. "Dirty Birds", "Tapex", "boba", "refreshments", "snacks", "food", "T-shirt"). Exclude items that must be purchased (e.g. fundraisers or discounts).'
+      },
+      location: { type: 'string' },
+      date: {
+        type: 'object',
+        properties: {
+          year: { type: 'number' },
+          month: { type: 'number', description: 'Month is between 1 and 12' },
+          date: { type: 'number' }
+        },
+        required: ['year', 'month', 'date']
+      },
+      start: {
+        type: 'object',
+        properties: {
+          hour: { type: 'number', description: '24-hour format.' },
+          minute: { type: 'number' }
+        },
+        required: ['hour', 'minute'],
+        description:
+          'Tip: something like "6-9 pm" is the same as "6 pm to 9 pm"'
+      },
+      end: {
+        type: 'object',
+        properties: {
+          hour: { type: 'number', description: '24-hour format.' },
+          minute: { type: 'number' }
+        },
+        required: ['hour', 'minute'],
+        description:
+          'Tip: something like "6-9 pm" is the same as "6 pm to 9 pm"'
+      }
+    },
+    required: ['provided', 'location', 'date', 'start']
+  }
+}
 
 const fmt = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/Los_Angeles',
@@ -282,7 +328,17 @@ let geminiCalls = 0
 let starting = 0
 let geminiReady = Promise.resolve()
 
-type GeminiModel = 'gemini-2.0-flash' | 'gemini-2.5-flash'
+type GeminiModel =
+  | 'gemini-2.0-flash'
+  | 'gemini-2.0-flash-lite'
+  | 'gemini-2.5-flash'
+  | 'gemini-2.5-flash-lite'
+const modelPriority: GeminiModel[] = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-lite'
+]
 
 export class FreeFoodScraper {
   #allUserStories: UserStories[] = []
@@ -291,7 +347,7 @@ export class FreeFoodScraper {
   #expectedUsernameOrder: string[] = []
   #expectedUsernames = new Set<string>()
   #seenUsernames = new Set<string>()
-  #model: GeminiModel = 'gemini-2.0-flash'
+  #model: GeminiModel = modelPriority[0]
 
   logs = ''
 
@@ -311,7 +367,11 @@ export class FreeFoodScraper {
   }
 
   #getUsernameScrapeStatus (): string {
-    return `\`${this.#expectedUsernameOrder.map(username => this.#seenUsernames.has(username) ? '.' : '!').join('')}\` (${this.#seenUsernames.size}/${this.#expectedUsernameOrder.length})`
+    return `\`${this.#expectedUsernameOrder
+      .map(username => (this.#seenUsernames.has(username) ? '.' : '!'))
+      .join('')}\` (${this.#seenUsernames.size}/${
+      this.#expectedUsernameOrder.length
+    })`
   }
 
   async #fetchImage (url: string, retries = 0): Promise<ArrayBuffer> {
@@ -364,9 +424,11 @@ export class FreeFoodScraper {
     }
     geminiCalls++
     ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+
+    let result
     try {
       // TODO: turn down the temperature maybe
-      const result = await ai.models.generateContent({
+      result = await ai.models.generateContent({
         model: this.#model,
         contents: [
           ...images.map(
@@ -386,7 +448,8 @@ export class FreeFoodScraper {
           }
         ],
         config: {
-          responseMimeType: 'application/json'
+          responseMimeType: 'application/json',
+          responseJsonSchema
         }
       })
       return JSON.parse(
@@ -420,10 +483,10 @@ export class FreeFoodScraper {
             ) ||
             error.message.includes('The model is overloaded.')
           ) {
-            const nextModel: GeminiModel =
-              this.#model === 'gemini-2.0-flash'
-                ? 'gemini-2.5-flash'
-                : 'gemini-2.0-flash'
+            const nextModel =
+              modelPriority[
+                (modelPriority.indexOf(this.#model) + 1) % modelPriority.length
+              ]
             this.#log(
               `[gemini] ${this.#model} ${
                 error.message.includes(
@@ -440,6 +503,10 @@ export class FreeFoodScraper {
           `[gemini] cooling off for ${timeout} secs then retrying. retries = ${retries}`
         )
         await new Promise(resolve => setTimeout(resolve, timeout * 1000))
+        resolve()
+        return this.#readImages(images, timestamp, caption, retries + 1)
+      } else if (error instanceof SyntaxError) {
+        this.#log(`JSON parse error (${error.message}): ${result?.text}`)
         resolve()
         return this.#readImages(images, timestamp, caption, retries + 1)
       } else {
@@ -1019,15 +1086,31 @@ export class FreeFoodScraper {
       note += this.#getUsernameScrapeStatus()
       onBrowserEnd?.(undefined, { ...this.#stats(), note })
     } catch (error) {
-      this.#log(`[browser] There was an error! 🚨 ${page.isClosed() ? 'page closed' : 'page still open'}`)
-      await page.screenshot({
-        path: 'data/free-food-debug-screenshot.png'
-        // fullPage: true
-      }).catch(error => this.#log(`[browser] error screenshotting error screenshot: ${error instanceof Error ? error.message : error}`))
+      this.#log(
+        `[browser] There was an error! 🚨 ${
+          page.isClosed() ? 'page closed' : 'page still open'
+        }`
+      )
+      await page
+        .screenshot({
+          path: 'data/free-food-debug-screenshot.png'
+          // fullPage: true
+        })
+        .catch(error =>
+          this.#log(
+            `[browser] error screenshotting error screenshot: ${
+              error instanceof Error ? error.message : error
+            }`
+          )
+        )
       note += this.#getUsernameScrapeStatus()
       onBrowserEnd?.(error, { ...this.#stats(), note })
     } finally {
-      this.#log(`[browser] closing browser. ${page.isClosed() ? 'page already closed ??' : 'page still open'}`)
+      this.#log(
+        `[browser] closing browser. ${
+          page.isClosed() ? 'page already closed ??' : 'page still open'
+        }`
+      )
       await context.close()
       await browser.close()
       this.#log('[browser] i close the browser')
@@ -1082,6 +1165,7 @@ export class FreeFoodScraper {
     return {
       posts: this.#allTimelinePosts.length,
       users: this.#seenUsernames.size,
+      totalUsers: this.#expectedUsernames.size,
       stories: totalStories
     }
   }
@@ -1255,9 +1339,16 @@ const displayInsertStats = ({
   note,
   posts,
   stories,
-  users
+  users,
+  totalUsers
 }: InsertStats) =>
-  `${inserted} new events added from ${posts} posts (${newPosts} new), ${stories} stories (${newStories} new) from ${users} users.\n\n${note}`
+  `${inserted} new events added from ${posts} posts (${newPosts} new), and ${stories} stories (${newStories} new) from ${users} of ${totalUsers} users.\n\n${note}`
 
-const displayScrapeStats = ({ note, posts, stories, users }: ScrapeStats) =>
-  `Scraped ${stories} stories from ${users} users and ${posts} posts.\n\n${note}`
+const displayScrapeStats = ({
+  note,
+  posts,
+  stories,
+  users,
+  totalUsers
+}: ScrapeStats) =>
+  `Scraped ${stories} stories from ${users} of ${totalUsers} users, and ${posts} posts.\n\n${note}`
