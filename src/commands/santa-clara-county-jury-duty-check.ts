@@ -1,19 +1,5 @@
 import { Message } from 'discord.js'
 import select from '../utils/select'
-import { randomBytes } from 'node:crypto'
-import { globalAgent } from 'node:https'
-import { rootCertificates } from 'node:tls'
-import { readFile } from 'node:fs/promises'
-
-// https://stackoverflow.com/a/60020493
-// https://stackoverflow.com/a/68904454
-globalAgent.options.ca = [
-  ...rootCertificates,
-  await readFile(
-    './src/commands/santa-clara-county-jury-duty-check.pem',
-    'utf-8'
-  )
-]
 
 export async function checkJuryDuty (
   message: Message,
@@ -46,7 +32,25 @@ export async function checkJuryDuty (
 
   await message.react('🧑‍💻')
 
-  const jsessionid = randomBytes(16).toString('hex').toUpperCase()
+  const cookieResponse = await fetch('https://jury.scscourt.org/login')
+  const match = cookieResponse.headers
+    .getSetCookie()
+    .join('')
+    .match(/JSESSIONID=([0-9A-F]{32})/)
+  if (!match) {
+    await message.reply({
+      embeds: [
+        {
+          title: 'get cookie fail fail',
+          description: 'couldnt get cookie',
+          color: 0xfb2c36
+        }
+      ]
+    })
+    return
+  }
+  const jsessionid = match[1]
+
   const loginResponse = await fetch('https://jury.scscourt.org/login', {
     headers: {
       // accept: 'application/json, text/javascript, */*; q=0.01',
@@ -61,7 +65,22 @@ export async function checkJuryDuty (
       embeds: [
         {
           title: 'login fail',
-          description: '```json\n' + (await loginResponse.text()) + '\n```'
+          description: '```json\n' + (await loginResponse.text()) + '\n```',
+          color: 0xfb2c36
+        }
+      ]
+    })
+    return
+  }
+
+  const { status, message: loginMessage } = await loginResponse.json()
+  if (!status) {
+    await message.reply({
+      embeds: [
+        {
+          title: 'login bad',
+          description: loginMessage,
+          color: 0xfb2c36
         }
       ]
     })
@@ -78,20 +97,34 @@ export async function checkJuryDuty (
         {
           title: 'get instruction fail',
           description:
-            '```json\n' + (await instructionResponse.text()) + '\n```'
+            '```json\n' + (await instructionResponse.text()) + '\n```',
+          color: 0xfb2c36
         }
       ]
     })
     return
   }
 
-  const { data } = await instructionResponse.json()
-  await message.reply({
-    embeds: [
-      {
-        title: 'santa clara county has a word with you',
-        description: '```html\n' + data + '\n```'
-      }
-    ]
-  })
+  const json = await instructionResponse.text()
+  try {
+    const { data } = JSON.parse(json)
+    await message.reply({
+      embeds: [
+        {
+          title: 'santa clara county has a word with you',
+          description: '```html\n' + data + '\n```'
+        }
+      ]
+    })
+  } catch {
+    await message.reply({
+      embeds: [
+        {
+          title: 'parse instruction fail',
+          description: '```html\n' + json.slice(0, 2000) + '\n```',
+          color: 0xfb2c36
+        }
+      ]
+    })
+  }
 }
