@@ -130,6 +130,8 @@ const commands: Record<string, Command> = {
   'i renounce my life of crime': cmd.ucpd.untrack,
   'disable ucpd reports in this channel': cmd.ucpd.untrack,
 
+  'jury duty:': cmd.santaClaraCountyJuryDutyCheck.checkJuryDuty,
+
   'this is a poll channel': cmd.pollReactions.pollChannel,
   'turn on poll channel mode which auto-adds reactions to messages':
     cmd.pollReactions.pollChannel,
