@@ -1,6 +1,11 @@
 import { Message } from 'discord.js'
-import select from '../utils/select'
 import { randomBytes } from 'node:crypto'
+import select from '../utils/select'
+import { globalAgent } from 'node:https'
+import { create } from 'ssl-root-cas'
+
+// jury.scscourt.org's SSL certificates have an incomplete chain
+globalAgent.options.ca = create()
 
 export async function checkJuryDuty (
   message: Message,
