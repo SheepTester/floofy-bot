@@ -2,6 +2,10 @@ import { Message } from 'discord.js'
 import select from '../utils/select'
 import { randomBytes } from 'node:crypto'
 
+// https://stackoverflow.com/a/60020493
+process.env.NODE_EXTRA_CA_CERTS =
+  './src/commands/santa-clara-county-jury-duty-check.pem'
+
 export async function checkJuryDuty (
   message: Message,
   [args]: string[]
