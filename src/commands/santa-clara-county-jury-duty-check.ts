@@ -1,10 +1,19 @@
 import { Message } from 'discord.js'
 import select from '../utils/select'
 import { randomBytes } from 'node:crypto'
+import { globalAgent } from 'node:https'
+import { rootCertificates } from 'node:tls'
+import { readFile } from 'node:fs/promises'
 
 // https://stackoverflow.com/a/60020493
-process.env.NODE_EXTRA_CA_CERTS =
-  './src/commands/santa-clara-county-jury-duty-check.pem'
+// https://stackoverflow.com/a/68904454
+globalAgent.options.ca = [
+  ...rootCertificates,
+  await readFile(
+    './src/commands/santa-clara-county-jury-duty-check.pem',
+    'utf-8'
+  )
+]
 
 export async function checkJuryDuty (
   message: Message,
