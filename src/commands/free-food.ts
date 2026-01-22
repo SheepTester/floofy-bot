@@ -373,7 +373,7 @@ export class FreeFoodScraper {
       .map(username => (this.#seenUsernames.has(username) ? '.' : '!'))
       .join('')}\` (${this.#seenUsernames.size}/${
       this.#expectedUsernameOrder.length
-    })`
+    })\n`
   }
 
   async #fetchImage (url: string, retries = 0): Promise<ArrayBuffer> {
@@ -1191,7 +1191,7 @@ export class FreeFoodScraper {
     }
     insertReqs.sort((a, b) => a.priority - b.priority)
     let failRest = false
-    for (const { args, callback } of insertReqs) {
+    for (const [i, { args, callback }] of insertReqs.entries()) {
       if (failRest) {
         callback({ success: false })
         continue
@@ -1206,6 +1206,9 @@ export class FreeFoodScraper {
       )
       if (!shouldContinue) {
         failRest = true
+        note += `Giving up after ${i} of ${insertReqs.length}. Model: ${
+          this.#model
+        }\n`
       }
     }
 
