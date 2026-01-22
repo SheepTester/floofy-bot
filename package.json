@@ -6,7 +6,7 @@
   "scripts": {
     "build": "esbuild src/index.ts --format=esm --platform=node --bundle --packages=external --outfile=src/bundle.mjs",
     "dev": "npm run build && npm start -- --dev",
-    "start": "NODE_EXTRA_CA_CERTS=./src/commands/santa-clara-county-jury-duty-check.pem node index.js",
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
