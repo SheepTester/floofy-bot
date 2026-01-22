@@ -329,14 +329,16 @@ let starting = 0
 let geminiReady = Promise.resolve()
 
 type GeminiModel =
+  | 'gemini-3-flash'
   | 'gemini-2.0-flash'
   | 'gemini-2.0-flash-lite'
   | 'gemini-2.5-flash'
   | 'gemini-2.5-flash-lite'
 const modelPriority: GeminiModel[] = [
+  'gemini-3-flash',
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
   'gemini-2.5-flash-lite',
+  'gemini-2.0-flash',
   'gemini-2.0-flash-lite'
 ]
 
@@ -466,45 +468,49 @@ export class FreeFoodScraper {
       // ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15\nPlease retry in 55.369243237s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"15"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"55s"}]}}
       // ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 200\nPlease retry in 55.515718001s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"200"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"55s"}]}}
       if (
-        retries < 5 &&
         error instanceof ApiError &&
         (error.status === 503 || error.status === 500 || error.status === 429)
       ) {
         this.#log('[gemini]', error)
-        let timeout = 60 * (retries + 1) + 5
-        if (error.status === 429) {
-          const match = error.message.match(/"retryDelay":"(\d+)s"/)
-          if (match) {
-            timeout = +match[1] + 5
+        if (retries < 5) {
+          let timeout = 60 * (retries + 1) + 5
+          if (error.status === 429) {
+            const match = error.message.match(/"retryDelay":"(\d+)s"/)
+            if (match) {
+              timeout = +match[1] + 5
+            }
+            if (
+              error.message.includes(
+                'GenerateRequestsPerDayPerProjectPerModel'
+              ) ||
+              error.message.includes('The model is overloaded.')
+            ) {
+              const nextModel =
+                modelPriority[
+                  (modelPriority.indexOf(this.#model) + 1) %
+                    modelPriority.length
+                ]
+              this.#log(
+                `[gemini] ${this.#model} ${
+                  error.message.includes(
+                    'GenerateRequestsPerDayPerProjectPerModel'
+                  )
+                    ? 'ratelimit reached'
+                    : 'overloaded'
+                }, switching to ${nextModel}`
+              )
+              this.#model = nextModel
+            }
           }
-          if (
-            error.message.includes(
-              'GenerateRequestsPerDayPerProjectPerModel'
-            ) ||
-            error.message.includes('The model is overloaded.')
-          ) {
-            const nextModel =
-              modelPriority[
-                (modelPriority.indexOf(this.#model) + 1) % modelPriority.length
-              ]
-            this.#log(
-              `[gemini] ${this.#model} ${
-                error.message.includes(
-                  'GenerateRequestsPerDayPerProjectPerModel'
-                )
-                  ? 'ratelimit reached'
-                  : 'overloaded'
-              }, switching to ${nextModel}`
-            )
-            this.#model = nextModel
-          }
+          this.#log(
+            `[gemini] cooling off for ${timeout} secs then retrying. retries = ${retries}`
+          )
+          await new Promise(resolve => setTimeout(resolve, timeout * 1000))
+          resolve()
+          return this.#readImages(images, timestamp, caption, retries + 1)
+        } else {
+          throw new Error('too many api errors')
         }
-        this.#log(
-          `[gemini] cooling off for ${timeout} secs then retrying. retries = ${retries}`
-        )
-        await new Promise(resolve => setTimeout(resolve, timeout * 1000))
-        resolve()
-        return this.#readImages(images, timestamp, caption, retries + 1)
       } else if (error instanceof SyntaxError) {
         this.#log(`JSON parse error (${error.message}): ${result?.text}`)
         resolve()
@@ -1118,32 +1124,89 @@ export class FreeFoodScraper {
 
     await Promise.allSettled(promises).catch(() => {})
 
+    const insertReqs: {
+      args: [
+        sourceId: string,
+        url: string,
+        imageUrls: string[],
+        timestamp: Date,
+        caption?: string
+      ]
+      /** Lower means it'll be processed first */
+      priority: number
+      callback: (
+        result:
+          | { success: true; eventsAdded: number | null }
+          | { success: false }
+      ) => boolean
+    }[] = []
     let total = 0
     let oldStories = 0
+    let failStories = 0
     for (const { username, stories } of this.#allUserStories) {
-      for (const { storyId, postId, imageUrl, timestamp } of stories) {
+      for (const [
+        i,
+        { storyId, postId, imageUrl, timestamp }
+      ] of stories.entries()) {
         const sourceId = `story/${username}/${storyId}`
         const url = postId
           ? `https://www.instagram.com/p/${postId}/`
           : `https://www.instagram.com/stories/${username}/${storyId}/`
-        total +=
-          (await this.#insertIfNew(sourceId, url, [imageUrl], timestamp)) ??
-          (oldStories++, 0)
+        insertReqs.push({
+          args: [sourceId, url, [imageUrl], timestamp],
+          priority: i,
+          callback: result => {
+            if (result.success) {
+              total += result.eventsAdded ?? (oldStories++, 0)
+            } else {
+              failStories++
+            }
+            return result.success
+          }
+        })
       }
     }
     let oldPosts = 0
+    let failPosts = 0
+    const postsByUsername: Record<string, number> = {}
     for (const { username, postId, caption, imageUrls, timestamp } of this
       .#allTimelinePosts) {
       const sourceId = `post/${username}/${postId}`
       const url = `https://www.instagram.com/p/${postId}/`
-      total +=
-        (await this.#insertIfNew(
-          sourceId,
-          url,
-          imageUrls,
-          timestamp,
-          caption
-        )) ?? (oldPosts++, 0)
+      // Posts have slightly lower priority than stories
+      postsByUsername[username] ??= 0.5
+      insertReqs.push({
+        args: [sourceId, url, imageUrls, timestamp, caption],
+        priority: postsByUsername[username],
+        callback: result => {
+          if (result.success) {
+            total += result.eventsAdded ?? (oldPosts++, 0)
+          } else {
+            failPosts++
+          }
+          return result.success
+        }
+      })
+      postsByUsername[username]++
+    }
+    insertReqs.sort((a, b) => a.priority - b.priority)
+    let failRest = false
+    for (const { args, callback } of insertReqs) {
+      if (failRest) {
+        callback({ success: false })
+        continue
+      }
+      const shouldContinue = callback(
+        await this.#insertIfNew(...args)
+          .then(eventsAdded => ({ success: true, eventsAdded }))
+          .catch(error => {
+            this.#log('[insertIfNew] error', error)
+            return { success: false }
+          })
+      )
+      if (!shouldContinue) {
+        failRest = true
+      }
     }
 
     this.#log('[insert] ok gamers we done')
@@ -1151,8 +1214,8 @@ export class FreeFoodScraper {
     return {
       ...stats,
       inserted: total,
-      newPosts: this.#allTimelinePosts.length - oldPosts,
-      newStories: stats.stories - oldStories,
+      newPosts: this.#allTimelinePosts.length - oldPosts - failPosts,
+      newStories: stats.stories - oldStories - failStories,
       note
     }
   }
