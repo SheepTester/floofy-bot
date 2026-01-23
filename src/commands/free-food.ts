@@ -1,4 +1,4 @@
-import type { Part } from '@google/genai'
+import type { Part, ThinkingLevel } from '@google/genai'
 import { ApiError, GoogleGenAI } from '@google/genai'
 import { Client, Message } from 'discord.js'
 import fs from 'fs/promises'
@@ -329,13 +329,13 @@ let starting = 0
 let geminiReady = Promise.resolve()
 
 type GeminiModel =
-  | 'gemini-3-flash'
+  | 'gemini-3-flash-preview'
   | 'gemini-2.0-flash'
   | 'gemini-2.0-flash-lite'
   | 'gemini-2.5-flash'
   | 'gemini-2.5-flash-lite'
 const modelPriority: GeminiModel[] = [
-  'gemini-3-flash',
+  'gemini-3-flash-preview',
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-2.0-flash',
@@ -454,13 +454,18 @@ export class FreeFoodScraper {
           responseJsonSchema
         }
       })
-      return JSON.parse(
+      const value = JSON.parse(
         // sometimes will generate `"minute": 05` or `00`
         result.text?.replace(
           /"minute":\s*0+([0-9])/,
           (_, digit) => `"minute": ${digit}`
         ) ?? '{}'
       )
+      if (!Array.isArray(value)) {
+        console.error(result)
+        throw new Error(`[gemini] not an array: ${result.text}`)
+      }
+      return value
     } catch (error) {
       // ServerError: got status: 503 Service Unavailable. {"error":{"code":503,"message":"The model is overloaded. Please try again later.","status":"UNAVAILABLE"}}
       // ServerError: got status: 500 Internal Server Error. {"error":{"code":500,"message":"Internal error encountered.","status":"INTERNAL"}}
@@ -471,7 +476,7 @@ export class FreeFoodScraper {
         error instanceof ApiError &&
         (error.status === 503 || error.status === 500 || error.status === 429)
       ) {
-        this.#log('[gemini]', error)
+        this.#log(`[gemini] apierror caught (${this.#model}):`, error)
         if (retries < 5) {
           let timeout = 60 * (retries + 1) + 5
           if (error.status === 429) {
