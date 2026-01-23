@@ -1,4 +1,4 @@
-import type { Part, ThinkingLevel } from '@google/genai'
+import { Part, ThinkingLevel } from '@google/genai'
 import { ApiError, GoogleGenAI } from '@google/genai'
 import { Client, Message } from 'discord.js'
 import fs from 'fs/promises'
@@ -350,6 +350,7 @@ export class FreeFoodScraper {
   #expectedUsernames = new Set<string>()
   #seenUsernames = new Set<string>()
   #model: GeminiModel = modelPriority[0]
+  geminiIncomplete = false
 
   logs = ''
 
@@ -451,7 +452,13 @@ export class FreeFoodScraper {
         ],
         config: {
           responseMimeType: 'application/json',
-          responseJsonSchema
+          responseJsonSchema,
+          thinkingConfig: {
+            thinkingLevel:
+              this.#model === 'gemini-3-flash-preview'
+                ? ThinkingLevel.MINIMAL
+                : undefined
+          }
         }
       })
       const value = JSON.parse(
@@ -463,7 +470,7 @@ export class FreeFoodScraper {
       )
       if (!Array.isArray(value)) {
         console.error(result)
-        throw new Error(`[gemini] not an array: ${result.text}`)
+        throw new TypeError(`[gemini] not an array: ${result.text}`)
       }
       return value
     } catch (error) {
@@ -1142,9 +1149,10 @@ export class FreeFoodScraper {
       callback: (
         result:
           | { success: true; eventsAdded: number | null }
-          | { success: false }
+          | { success: false; shouldContinue: boolean }
       ) => boolean
     }[] = []
+    const geminiStatus = []
     let total = 0
     let oldStories = 0
     let failStories = 0
@@ -1157,39 +1165,51 @@ export class FreeFoodScraper {
         const url = postId
           ? `https://www.instagram.com/p/${postId}/`
           : `https://www.instagram.com/stories/${username}/${storyId}/`
+        const index = geminiStatus.length
+        geminiStatus.push('?')
         insertReqs.push({
           args: [sourceId, url, [imageUrl], timestamp],
           priority: i,
           callback: result => {
             if (result.success) {
               total += result.eventsAdded ?? (oldStories++, 0)
+              geminiStatus[index] = result.eventsAdded !== null ? ':' : '.'
+              return true
             } else {
               failStories++
+              geminiStatus[index] = 'x'
+              return result.shouldContinue
             }
-            return result.success
           }
         })
       }
+      geminiStatus.push(' ')
     }
     let oldPosts = 0
     let failPosts = 0
     const postsByUsername: Record<string, number> = {}
+    geminiStatus.push('(posts:) ')
     for (const { username, postId, caption, imageUrls, timestamp } of this
       .#allTimelinePosts) {
       const sourceId = `post/${username}/${postId}`
       const url = `https://www.instagram.com/p/${postId}/`
       // Posts have slightly lower priority than stories
       postsByUsername[username] ??= 0.5
+      const index = geminiStatus.length
+      geminiStatus.push('?')
       insertReqs.push({
         args: [sourceId, url, imageUrls, timestamp, caption],
         priority: postsByUsername[username],
         callback: result => {
           if (result.success) {
             total += result.eventsAdded ?? (oldPosts++, 0)
+            geminiStatus[index] = result.eventsAdded !== null ? ':' : '.'
+            return true
           } else {
             failPosts++
+            geminiStatus[index] = 'x'
+            return result.shouldContinue
           }
-          return result.success
         }
       })
       postsByUsername[username]++
@@ -1198,15 +1218,20 @@ export class FreeFoodScraper {
     let failRest = false
     for (const [i, { args, callback }] of insertReqs.entries()) {
       if (failRest) {
-        callback({ success: false })
+        callback({ success: false, shouldContinue: true })
         continue
       }
       const shouldContinue = callback(
         await this.#insertIfNew(...args)
-          .then(eventsAdded => ({ success: true, eventsAdded }))
+          .then(eventsAdded => ({ success: true as const, eventsAdded }))
           .catch(error => {
-            this.#log('[insertIfNew] error', error)
-            return { success: false }
+            this.#log(`[insertIfNew] error for ${args[0]}:`, error)
+            return {
+              success: false as const,
+              shouldContinue:
+                error instanceof TypeError &&
+                error.message.startsWith('[gemini] not an array:')
+            }
           })
       )
       if (!shouldContinue) {
@@ -1214,8 +1239,11 @@ export class FreeFoodScraper {
         note += `Giving up after ${i} of ${insertReqs.length}. Model: ${
           this.#model
         }\n`
+        this.geminiIncomplete = true
       }
     }
+
+    note += '```\n' + geminiStatus.join('') + '\n```\n'
 
     this.#log('[insert] ok gamers we done')
     const stats = this.#stats()
@@ -1299,6 +1327,11 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
           .catch(() => undefined)
       })
     })
+    if (scraper.geminiIncomplete) {
+      await notify(client, `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``, {
+        footer: getFooter()
+      })
+    }
     await notify(client, displayInsertStats(stats), {
       footer: getFooter(),
       file: await fs
@@ -1366,6 +1399,17 @@ export async function debugScraper (message: Message): Promise<void> {
         ]
       })
     })
+    if (scraper.geminiIncomplete) {
+      await message.reply({
+        allowedMentions: { repliedUser: false },
+        embeds: [
+          {
+            description: `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``,
+            footer: { text: getFooter() }
+          }
+        ]
+      })
+    }
     await message.reply({
       embeds: [
         {
