@@ -1177,7 +1177,7 @@ export class FreeFoodScraper {
               return true
             } else {
               failStories++
-              geminiStatus[index] = 'x'
+              geminiStatus[index] = result.shouldContinue ? 'u' : 'x'
               return result.shouldContinue
             }
           }
@@ -1188,7 +1188,7 @@ export class FreeFoodScraper {
     let oldPosts = 0
     let failPosts = 0
     const postsByUsername: Record<string, number> = {}
-    geminiStatus.push('(posts:) ')
+    geminiStatus.push('(posts) ')
     for (const { username, postId, caption, imageUrls, timestamp } of this
       .#allTimelinePosts) {
       const sourceId = `post/${username}/${postId}`
@@ -1203,11 +1203,11 @@ export class FreeFoodScraper {
         callback: result => {
           if (result.success) {
             total += result.eventsAdded ?? (oldPosts++, 0)
-            geminiStatus[index] = result.eventsAdded !== null ? ':' : '.'
+            geminiStatus[index] = result.eventsAdded !== null ? '_' : '.'
             return true
           } else {
             failPosts++
-            geminiStatus[index] = 'x'
+            geminiStatus[index] = result.shouldContinue ? 'U' : 'x'
             return result.shouldContinue
           }
         }
