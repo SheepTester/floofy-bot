@@ -1177,7 +1177,7 @@ export class FreeFoodScraper {
               return true
             } else {
               failStories++
-              geminiStatus[index] = result.shouldContinue ? 'u' : 'x'
+              geminiStatus[index] = result.shouldContinue ? 'U' : 'x'
               return result.shouldContinue
             }
           }
@@ -1218,7 +1218,7 @@ export class FreeFoodScraper {
     let failRest = false
     for (const [i, { args, callback }] of insertReqs.entries()) {
       if (failRest) {
-        callback({ success: false, shouldContinue: true })
+        callback({ success: false, shouldContinue: false })
         continue
       }
       const shouldContinue = callback(
