@@ -43,6 +43,9 @@ export default class CachedMap<T> {
   }
 
   async save (): Promise<void> {
-    await fs.writeFile(this.#path, JSON.stringify(this.#object, null, '\t'))
+    await fs.writeFile(
+      this.#path,
+      JSON.stringify(this.#object, null, '\t') + '\n'
+    )
   }
 }
