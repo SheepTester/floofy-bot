@@ -48,7 +48,7 @@ async function help (message: Message): Promise<void> {
           aliases.values(),
           ([name, ...aliases]) =>
             `- **${name}**` +
-            (aliases.length
+            (aliases.length > 0
               ? ` or ${aliases.map(alias => `\`${alias}\``).join(' or ')}`
               : `. *${select([
                 'no aliases, nice',
@@ -261,8 +261,8 @@ async function handleMessage (message: Message): Promise<void> {
     cmd.mentions.onMessage(message),
     cmd.emojiUsage.onMessage(message),
     !ranCommand &&
-      cmd.wiseGuy.onMessage(message).then(async shouldBehaveNormally => {
-        if (shouldBehaveNormally && botReply) {
+      cmd.wiseGuy.onMessage(message).then(async sentMessage => {
+        if (!sentMessage && botReply) {
           await message.reply(botReply)
         }
       })

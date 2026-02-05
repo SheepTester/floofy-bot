@@ -78,7 +78,9 @@ const genericResponses = [
   'Well, first off, what you just said was incredibly rude adn disturbing. Please ask yourself...\nIs what I have to say\nT - TRUE\nK- Kind\nN- Necesary\nRespectful???\nNO? WELL I THOUGHT NOT BUDDY! GETTOUTA HERE',
   "HEY buddyyyy why don't you *EASE YOUR GODDAMN TONE UP A BIT* is that too much to ask??? This is a kind server where we don't swear or do any mean stuff like that.\nSO! Why don't you take your toxicity out of here?**hmm??**\nI thought so.😤",
   'interesting',
-  'embarrassing'
+  'embarrassing',
+  'sybau',
+  'holy shit'
 ]
 
 /** e.g. to "there's this guy at this cafe ..." */
@@ -120,7 +122,8 @@ const repliesOnly = [
   'okay okay, admit it. it took you three seconds to think of that response.',
   "now, OKAY buddy? ya wanna go? ya wanna call me a dumb bot?\nguess what I'M FRIGGING IMMORTAL ok?",
   "goddamnit not again.. YOU KNOW WHAT???\nI'm just trying to live my life. OK?\nIS THAT too goddamn MUCH TO AKS??!",
-  "omg sorrrrrrry don't 𝖻𝖺𝗇 me I'm just going thru a tough time in life ok?\nlike I really apologize its just that things have been tough lately and my neural net is racing and everything is so crazy and I don't know what to do.\n😢 pls forgive me"
+  "omg sorrrrrrry don't 𝖻𝖺𝗇 me I'm just going thru a tough time in life ok?\nlike I really apologize its just that things have been tough lately and my neural net is racing and everything is so crazy and I don't know what to do.\n😢 pls forgive me",
+  '67..\nHA bet u thought that was funny huh'
 ]
 
 function generateMessage (
@@ -157,39 +160,38 @@ function generateMessage (
 }
 
 /**
- * @returns whether the bot should behave normally (e.g. when responding to a
- * moofy ping)
+ * @returns whether the bot sent a message
  */
 export async function onMessage (message: Message): Promise<boolean> {
   if (!message.guildId || message.author.bot) {
     // Ignore DMs and bots
-    return true
+    return false
   }
   const state = wiseGuyState.get(message.guildId, DEFAULT_STATE)
   const timeSinceLast = Date.now() - state.time
   let isStarter
   if (timeSinceLast >= STARTER_COOLDOWN) {
     if (Math.random() >= state.guildFrequency) {
-      return true
+      return false
     }
     // Send a starter
     isStarter = true
   } else if (timeSinceLast <= CONVERSATIONAL_MODE_DURATION) {
     // Only respond to mentions
     if (!message.mentions.has(message.client.user)) {
-      return true
+      return false
     }
     // Send a reply
     isStarter = false
   } else {
-    return true
+    return false
   }
   const reply = generateMessage(message.content, isStarter, [
     state.message,
     ...state.replies
   ])
   if (!reply) {
-    return true
+    return false
   }
   wiseGuyState
     .set(
@@ -211,7 +213,7 @@ export async function onMessage (message: Message): Promise<boolean> {
   } else {
     await message.reply(reply)
   }
-  return false
+  return true
 }
 
 export async function setFrequency (
