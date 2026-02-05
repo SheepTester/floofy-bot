@@ -6,6 +6,34 @@ import CachedMap from '../utils/CachedMap'
 import select from '../utils/select'
 import { delay } from '../utils/delay'
 
+const DEFAULT_FREQ = 0.05
+/**
+ * 1 hour between starter attempts
+ */
+const STARTER_COOLDOWN = 60 * 60 * 1000
+/**
+ * Conversational mode lasts for 3 min
+ */
+const CONVERSATIONAL_MODE_DURATION = 3 * 60 * 1000
+
+type LastWiseGuy = {
+  time: number
+  message: string
+  replies: string[]
+  guildFrequency: number
+}
+const DEFAULT_STATE: LastWiseGuy = {
+  time: 0,
+  message: '',
+  replies: [],
+  guildFrequency: DEFAULT_FREQ
+}
+
+const wiseGuyState = new CachedMap<Readonly<LastWiseGuy>>(
+  './data/wise-guy.json'
+)
+export const onReady = wiseGuyState.read
+
 /**
  * These messages can be used as unsolicited messages "starters" and responses
  * during conversational mode "replies."
@@ -95,16 +123,6 @@ const repliesOnly = [
   "omg sorrrrrrry don't 𝖻𝖺𝗇 me I'm just going thru a tough time in life ok?\nlike I really apologize its just that things have been tough lately and my neural net is racing and everything is so crazy and I don't know what to do.\n😢 pls forgive me"
 ]
 
-type LastWiseGuy = {
-  time: number
-  message: string
-  replies: string[]
-  guildFrequency: number
-}
-
-const wiseGuyState = new CachedMap<LastWiseGuy>('./data/wise-guy.json')
-export const onReady = wiseGuyState.read
-
 function generateMessage (
   content: string,
   isStarter: boolean,
@@ -138,39 +156,21 @@ function generateMessage (
   return select(filtered)
 }
 
-const DEFAULT_FREQ = 0.05
-/**
- * 1 hour between starter attempts
- */
-const STARTER_COOLDOWN = 60 * 60 * 1000
-/**
- * Conversational mode lasts for 3 min
- */
-const CONVERSATIONAL_MODE_DURATION = 3 * 60 * 1000
-
 /**
  * @returns whether the bot should behave normally (e.g. when responding to a
  * moofy ping)
  */
 export async function onMessage (message: Message): Promise<boolean> {
-  if (message.guildId === null || message.author.bot) {
+  if (!message.guildId || message.author.bot) {
     // Ignore DMs and bots
     return true
   }
-  const state = wiseGuyState.get(message.guildId, {
-    time: 0,
-    message: '',
-    replies: [],
-    guildFrequency: DEFAULT_FREQ
-  })
+  const state = wiseGuyState.get(message.guildId, DEFAULT_STATE)
   const timeSinceLast = Date.now() - state.time
   let isStarter
   console.log(state, timeSinceLast, message.guildId)
   if (timeSinceLast >= STARTER_COOLDOWN) {
-    // if (Math.random() >= state.guildFrequency) {
-    //   return true
-    // }
-    if (message.guildId !== '970821969501126727') {
+    if (Math.random() >= state.guildFrequency) {
       return true
     }
     // Send a starter
@@ -213,4 +213,47 @@ export async function onMessage (message: Message): Promise<boolean> {
     await message.reply(reply)
   }
   return false
+}
+
+export async function setFrequency (
+  message: Message,
+  [freqStr]: string[]
+): Promise<void> {
+  if (!message.guildId) {
+    await message.reply(
+      select([
+        '..in our DMs?? 😳',
+        'nah i don need this in DMs',
+        'ts is server only bro'
+      ])
+    )
+    return
+  }
+  const freq = +freqStr
+  if (!(0 <= freq && freq <= 1)) {
+    await message.reply(
+      select([
+        `does ${freqStr} look like a real number between 0 and 1 to you? no, right? so why did you give me that?`,
+        'ts isnt between 0 and 1',
+        'wtf is this'
+      ])
+    )
+    return
+  }
+  const state = wiseGuyState.get(message.guildId, DEFAULT_STATE)
+  wiseGuyState
+    .set(message.guildId, {
+      ...state,
+      guildFrequency: freq
+    })
+    .save()
+  await message.reply(
+    freq >= state.guildFrequency
+      ? select([
+        'ill GLADLY be louder fs fs',
+        'im a BIG enjoyer of freedom of speech',
+        'my mouth is AGAPE'
+      ])
+      : select(['ok censor me ig', 'u dont like me :(', 'fine ill shut up'])
+  )
 }

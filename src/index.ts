@@ -44,17 +44,18 @@ async function help (message: Message): Promise<void> {
           'words that i will accept',
           'helpp'
         ]),
-        fields: Array.from(aliases.values(), ([name, ...aliases]) => ({
-          name,
-          value: aliases.length
-            ? `or ${aliases.map(alias => `\`${alias}\``).join(' or ')}`
-            : select([
-              'no aliases, nice',
-              "that's it",
-              'this command has no aliases'
-            ]),
-          inline: true
-        }))
+        description: Array.from(
+          aliases.values(),
+          ([name, ...aliases]) =>
+            `- **${name}**` +
+            (aliases.length
+              ? ` or ${aliases.map(alias => `\`${alias}\``).join(' or ')}`
+              : `. *${select([
+                'no aliases, nice',
+                "that's it",
+                'this command has no aliases'
+              ])}*`)
+        ).join('\n')
       }
     ]
   })
@@ -130,6 +131,10 @@ const commands: Record<string, Command> = {
   'i renounce my life of crime': cmd.ucpd.untrack,
   'disable ucpd reports in this channel': cmd.ucpd.untrack,
 
+  'set moofy chance to:': cmd.wiseGuy.setFrequency,
+  'change frequency of unsolicited moofy reply to this number between 0 and 1:':
+    cmd.wiseGuy.setFrequency,
+
   'this is a poll channel': cmd.pollReactions.pollChannel,
   'turn on poll channel mode which auto-adds reactions to messages':
     cmd.pollReactions.pollChannel,
@@ -200,6 +205,7 @@ async function handleMessage (message: Message): Promise<void> {
   }
 
   const parsed = parseCommand(message)
+  let ranCommand = false
   let botReply: string | undefined
   // If ping
   if (parsed && !message.author.bot) {
@@ -228,6 +234,7 @@ async function handleMessage (message: Message): Promise<void> {
         'stop roleplaying a router'
       ])
     } else if (commands[command]) {
+      ranCommand = true
       await commands[command](message, args)
     } else {
       console.log('Unknown command:', command)
@@ -253,11 +260,12 @@ async function handleMessage (message: Message): Promise<void> {
     cmd.welcome.onMessage(message),
     cmd.mentions.onMessage(message),
     cmd.emojiUsage.onMessage(message),
-    cmd.wiseGuy.onMessage(message).then(async shouldBehaveNormally => {
-      if (shouldBehaveNormally && botReply) {
-        await message.reply(botReply)
-      }
-    })
+    !ranCommand &&
+      cmd.wiseGuy.onMessage(message).then(async shouldBehaveNormally => {
+        if (shouldBehaveNormally && botReply) {
+          await message.reply(botReply)
+        }
+      })
   ])
 
   const reactions =
