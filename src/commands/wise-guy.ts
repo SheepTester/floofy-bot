@@ -168,7 +168,6 @@ export async function onMessage (message: Message): Promise<boolean> {
   const state = wiseGuyState.get(message.guildId, DEFAULT_STATE)
   const timeSinceLast = Date.now() - state.time
   let isStarter
-  console.log(state, timeSinceLast, message.guildId)
   if (timeSinceLast >= STARTER_COOLDOWN) {
     if (Math.random() >= state.guildFrequency) {
       return true
