@@ -26,9 +26,9 @@ export type ParsedCommand = {
 
 /** Uses bot mentions as a prefix */
 export default function parseCommand (message: Message): ParsedCommand | null {
-  const bot = message.client.user!
+  const bot = message.client.user
   if (!regexCache[bot.id]) {
-    regexCache[bot.id] = new RegExp(`<@!?${message.client.user!.id}>`, 'g')
+    regexCache[bot.id] = new RegExp(`<@!?${message.client.user.id}>`, 'g')
   }
   if (message.mentions.has(bot) || regexCache[bot.id].test(message.content)) {
     const args = []

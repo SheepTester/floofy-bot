@@ -9,6 +9,7 @@ export * as source from './source'
 export * as ucpd from './ucpd'
 export * as voteLockdown from './vote-lockdown'
 export * as welcome from './welcome'
+export * as wiseGuy from './wise-guy'
 
 export * as about from './about'
 export * as ignore from './ignore-us'

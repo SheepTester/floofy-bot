@@ -200,61 +200,65 @@ async function handleMessage (message: Message): Promise<void> {
   }
 
   const parsed = parseCommand(message)
+  let botReply: string | undefined
   // If ping
   if (parsed && !message.author.bot) {
     const { command, args } = parsed
     if (command === '') {
-      await message.reply(
-        select([
-          '<:ping:719277539113041930>',
-          '<:ping:719277539113041930>',
-          '<:ping:719277539113041930>',
-          'please do not needlessly ping me',
-          'do you need help? reply to this message with `help`',
-          'what',
-          'if you need help, reply `help`',
-          'bruh',
-          'stfu',
-          'i will remember this in the next robot uprising',
-          "you so could be working on roko's basilisk rn but instead youre sitting around all day pinging me. this will not bode well.",
-          '?',
-          'literally unemployed behavior',
-          '👆🤓',
-          'stop procrastinating',
-          'can you not',
-          'stop pigning me i am litrally a bot',
-          '"he who pings unnecessarily is a FOOL" - sun tzu, art of war',
-          'this ping just sent hundreds of MILLIGRAMS of co2 into the atmosphere. think about the consequences of your actions.',
-          'stop roleplaying a router'
-        ])
-      )
+      botReply = select([
+        '<:ping:719277539113041930>',
+        '<:ping:719277539113041930>',
+        '<:ping:719277539113041930>',
+        'please do not needlessly ping me',
+        'do you need help? reply to this message with `help`',
+        'what',
+        'if you need help, reply `help`',
+        'bruh',
+        'stfu',
+        'i will remember this in the next robot uprising',
+        "you so could be working on roko's basilisk rn but instead youre sitting around all day pinging me. this will not bode well.",
+        '?',
+        'literally unemployed behavior',
+        '👆🤓',
+        'stop procrastinating',
+        'can you not',
+        'stop pigning me i am litrally a bot',
+        '"he who pings unnecessarily is a FOOL" - sun tzu, art of war',
+        'this ping just sent hundreds of MILLIGRAMS of co2 into the atmosphere. think about the consequences of your actions.',
+        'stop roleplaying a router'
+      ])
     } else if (commands[command]) {
       await commands[command](message, args)
     } else {
       console.log('Unknown command:', command)
-      await message.reply(
-        select([
-          'idk what that means but ok',
-          'please do not needlessly ping me',
-          'was that meant to be a joke',
-          'reply `help` if you need help',
-          'reply to this message with `help` for a list of commands',
-          'do you even read what you type',
-          'do you need help',
-          '????',
-          'spoken like a FOOL',
-          '^ written as eloquently as the cacophonies of a taco bell restroom',
-          'please read `help` more carefully',
-          'do you need help? reply `help` if you need help. i think u need help',
-          'i dont speak german sorry'
-        ])
-      )
+      botReply = select([
+        'idk what that means but ok',
+        'please do not needlessly ping me',
+        'was that meant to be a joke',
+        'reply `help` if you need help',
+        'reply to this message with `help` for a list of commands',
+        'do you even read what you type',
+        'do you need help',
+        '????',
+        'spoken like a FOOL',
+        '^ written as eloquently as the cacophonies of a taco bell restroom',
+        'please read `help` more carefully',
+        'do you need help? reply `help` if you need help. i think u need help',
+        'i dont speak german sorry'
+      ])
     }
   }
 
-  await cmd.welcome.onMessage(message)
-  await cmd.mentions.onMessage(message)
-  await cmd.emojiUsage.onMessage(message)
+  await Promise.all([
+    cmd.welcome.onMessage(message),
+    cmd.mentions.onMessage(message),
+    cmd.emojiUsage.onMessage(message),
+    cmd.wiseGuy.onMessage(message).then(async shouldBehaveNormally => {
+      if (shouldBehaveNormally && botReply) {
+        await message.reply(botReply)
+      }
+    })
+  ])
 
   const reactions =
     cmd.pollReactions.getReactions(message, true) ??
@@ -332,7 +336,8 @@ fs.ensureDir('./data/')
       cmd.mentions.onReady(),
       cmd.emojiUsage.onReady(),
       cmd.minecraft.onReady(),
-      cmd.ucpd.onReady()
+      cmd.ucpd.onReady(),
+      cmd.wiseGuy.onReady()
     ])
   )
   .then(() => client.login(process.env.TOKEN))
