@@ -324,7 +324,6 @@ const fmt = new Intl.DateTimeFormat('en-US', {
 
 const POST_PAGES = isDev ? 2 : 10
 
-let ai: GoogleGenAI | undefined
 let geminiCalls = 0
 let starting = 0
 let geminiReady = Promise.resolve()
@@ -343,6 +342,26 @@ const modelPriority: GeminiModel[] = [
   'gemini-2.0-flash-lite'
 ]
 
+type ModelApiKeyPair = {
+  ai: GoogleGenAI
+  model: GeminiModel
+  name: string
+}
+let modelPairsCache: ModelApiKeyPair[] | undefined
+function getModelPairs (): ModelApiKeyPair[] {
+  if (!modelPairsCache) {
+    const apiKeys = Object.entries(process.env)
+      .filter(([k]) => k.startsWith('GEMINI_API_KEY'))
+      .map(([, v]) => v)
+      .filter(apiKey => apiKey !== undefined)
+      .map(apiKey => new GoogleGenAI({ apiKey }))
+    modelPairsCache = modelPriority.flatMap(model =>
+      apiKeys.map((ai, i) => ({ model, ai, name: `${model}[${i}]` }))
+    )
+  }
+  return modelPairsCache
+}
+
 export class FreeFoodScraper {
   #allUserStories: UserStories[] = []
   #allTimelinePosts: TimelinePost[] = []
@@ -350,7 +369,7 @@ export class FreeFoodScraper {
   #expectedUsernameOrder: string[] = []
   #expectedUsernames = new Set<string>()
   #seenUsernames = new Set<string>()
-  #model: GeminiModel = modelPriority[0]
+  #model: ModelApiKeyPair = getModelPairs()[0]
   geminiIncomplete = false
 
   logs = ''
@@ -427,13 +446,12 @@ export class FreeFoodScraper {
       starting = Date.now()
     }
     geminiCalls++
-    ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
     let result
     try {
       // TODO: turn down the temperature maybe
-      result = await ai.models.generateContent({
-        model: this.#model,
+      result = await this.#model.ai.models.generateContent({
+        model: this.#model.model,
         contents: [
           ...images.map(
             (buffer): Part => ({
@@ -456,7 +474,7 @@ export class FreeFoodScraper {
           responseJsonSchema,
           thinkingConfig: {
             thinkingLevel:
-              this.#model === 'gemini-3-flash-preview'
+              this.#model.model === 'gemini-3-flash-preview'
                 ? ThinkingLevel.MINIMAL
                 : undefined
           }
@@ -484,7 +502,7 @@ export class FreeFoodScraper {
         error instanceof ApiError &&
         (error.status === 503 || error.status === 500 || error.status === 429)
       ) {
-        this.#log(`[gemini] apierror caught (${this.#model}):`, error)
+        this.#log(`[gemini] apierror caught (${this.#model.name}):`, error)
         if (retries < 5) {
           let timeout = 60 * (retries + 1) + 5
           if (error.status === 429) {
@@ -498,19 +516,17 @@ export class FreeFoodScraper {
               ) ||
               error.message.includes('The model is overloaded.')
             ) {
+              const pairs = getModelPairs()
               const nextModel =
-                modelPriority[
-                  (modelPriority.indexOf(this.#model) + 1) %
-                    modelPriority.length
-                ]
+                pairs[(pairs.indexOf(this.#model) + 1) % pairs.length]
               this.#log(
-                `[gemini] ${this.#model} ${
+                `[gemini] ${this.#model.name} ${
                   error.message.includes(
                     'GenerateRequestsPerDayPerProjectPerModel'
                   )
                     ? 'ratelimit reached'
                     : 'overloaded'
-                }, switching to ${nextModel}`
+                }, switching to ${nextModel.name}`
               )
               this.#model = nextModel
             }
@@ -1239,7 +1255,7 @@ export class FreeFoodScraper {
       if (!shouldContinue) {
         failRest = true
         note += `Giving up after ${i} of ${insertReqs.length}. Model: ${
-          this.#model
+          this.#model.name
         }\n`
         this.geminiIncomplete = true
       }
