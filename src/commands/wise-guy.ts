@@ -6,7 +6,7 @@ import CachedMap from '../utils/CachedMap'
 import select from '../utils/select'
 import { delay } from '../utils/delay'
 
-const DEFAULT_FREQ = 0.05
+const DEFAULT_FREQ = 0.01
 /**
  * 1 hour between starter attempts
  */
@@ -20,13 +20,14 @@ type LastWiseGuy = {
   time: number
   message: string
   replies: string[]
-  guildFrequency: number
+  /** Old key */
+  guildFrequency?: unknown
+  guildFrequency2?: number
 }
 const DEFAULT_STATE: LastWiseGuy = {
   time: 0,
   message: '',
-  replies: [],
-  guildFrequency: DEFAULT_FREQ
+  replies: []
 }
 
 const wiseGuyState = new CachedMap<Readonly<LastWiseGuy>>(
@@ -171,18 +172,23 @@ export async function onMessage (message: Message): Promise<boolean> {
   const timeSinceLast = Date.now() - state.time
   let isStarter
   if (timeSinceLast >= STARTER_COOLDOWN) {
-    if (Math.random() >= state.guildFrequency) {
+    if (Math.random() < (state.guildFrequency2 ?? DEFAULT_FREQ)) {
+      // Send a starter
+      isStarter = true
+    } else {
       return false
     }
-    // Send a starter
-    isStarter = true
   } else if (timeSinceLast <= CONVERSATIONAL_MODE_DURATION) {
     // Only respond to mentions
-    if (!message.mentions.has(message.client.user)) {
+    if (
+      message.mentions.has(message.client.user) ||
+      /\bmoofy\b/i.test(message.content)
+    ) {
+      // Send a reply
+      isStarter = false
+    } else {
       return false
     }
-    // Send a reply
-    isStarter = false
   } else {
     return false
   }
@@ -201,7 +207,7 @@ export async function onMessage (message: Message): Promise<boolean> {
           time: Date.now(),
           message: reply,
           replies: [],
-          guildFrequency: state.guildFrequency
+          guildFrequency2: state.guildFrequency2
         }
         : { ...state, replies: [...state.replies, reply] }
     )
@@ -245,11 +251,11 @@ export async function setFrequency (
   wiseGuyState
     .set(message.guildId, {
       ...state,
-      guildFrequency: freq
+      guildFrequency2: freq
     })
     .save()
   await message.reply(
-    freq >= state.guildFrequency
+    freq >= (state.guildFrequency2 ?? DEFAULT_FREQ)
       ? select([
         'ill GLADLY be louder fs fs',
         'im a BIG enjoyer of freedom of speech',

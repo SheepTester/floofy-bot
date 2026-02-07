@@ -218,6 +218,7 @@ type ScrapedEvent = (
       previewData?: string
       postTimestamp?: Date
       caption?: string
+      scraped: number
     })
   | { result: false }
 ) & {
@@ -658,6 +659,7 @@ export class FreeFoodScraper {
             previewData,
             postTimestamp: timestamp,
             caption,
+            scraped: Date.now(),
             result: true
           })
         )

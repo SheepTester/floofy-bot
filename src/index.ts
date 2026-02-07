@@ -131,7 +131,7 @@ const commands: Record<string, Command> = {
   'i renounce my life of crime': cmd.ucpd.untrack,
   'disable ucpd reports in this channel': cmd.ucpd.untrack,
 
-  'set moofy chance to:': cmd.wiseGuy.setFrequency,
+  'set chance to:': cmd.wiseGuy.setFrequency,
   'change frequency of unsolicited moofy reply to this number between 0 and 1:':
     cmd.wiseGuy.setFrequency,
 
