@@ -132,7 +132,7 @@ const commands: Record<string, Command> = {
   'disable ucpd reports in this channel': cmd.ucpd.untrack,
 
   'set chance to:': cmd.wiseGuy.setFrequency,
-  'change frequency of unsolicited moofy reply to this number between 0 and 1:':
+  'change probability of unsolicited moofy reply to this number between 0 and 1:':
     cmd.wiseGuy.setFrequency,
 
   'this is a poll channel': cmd.pollReactions.pollChannel,

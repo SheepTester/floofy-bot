@@ -1,16 +1,16 @@
 // Stolen from Henry's wiseguy bot
 // https://sheeptester.github.io/hello-world/wiseguy.html
 
-import { Message } from 'discord.js'
+import { DiscordAPIError, Message, RESTJSONErrorCodes } from 'discord.js'
 import CachedMap from '../utils/CachedMap'
 import select from '../utils/select'
 import { delay } from '../utils/delay'
 
 const DEFAULT_FREQ = 0.01
 /**
- * 1 hour between starter attempts
+ * 73 min between starter attempts (less predictable than the top of the hour)
  */
-const STARTER_COOLDOWN = 60 * 60 * 1000
+const STARTER_COOLDOWN = 73 * 60 * 1000
 /**
  * Conversational mode lasts for 3 min
  */
@@ -214,10 +214,21 @@ export async function onMessage (message: Message): Promise<boolean> {
     .save()
   message.channel.sendTyping().catch(() => {})
   await delay(Math.floor(Math.random() * 5000) + 500)
-  if (isStarter) {
-    await message.channel.send(reply)
-  } else {
-    await message.reply(reply)
+  try {
+    if (isStarter) {
+      await message.channel.send(reply)
+    } else {
+      await message.reply(reply)
+    }
+  } catch (error) {
+    if (
+      error instanceof DiscordAPIError &&
+      error.code === RESTJSONErrorCodes.MissingPermissions
+    ) {
+      // oh well
+    } else {
+      throw error
+    }
   }
   return true
 }
