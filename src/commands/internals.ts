@@ -1,6 +1,7 @@
 import { exec } from 'child_process'
 import { Message } from 'discord.js'
 import select from '../utils/select'
+import { displayBytes } from '../utils/displayBytes'
 
 type ExecutionResult = {
   // I don't know where `ExecException` comes from
@@ -65,4 +66,27 @@ export async function exit (message: Message): Promise<void> {
       ])
     )
   }
+}
+
+export async function memUsage (message: Message): Promise<void> {
+  if (message.author.id !== process.env.OWNER) {
+    await message.reply(
+      select([
+        'mmmmmmmmmmmmmmmmmmmmmm no.',
+        'its too embarassing',
+        'high probably',
+        'ill HAVE you know i am VERY memory efficient for my age'
+      ])
+    )
+    return
+  }
+  const { rss, heapUsed, heapTotal, external, arrayBuffers } =
+    process.memoryUsage()
+  await message.reply(
+    `of total ${displayBytes(rss)}: heap ${displayBytes(
+      heapTotal
+    )} (${displayBytes(heapUsed)} used); C++ ${displayBytes(
+      external
+    )}; array buffers ${displayBytes(arrayBuffers)}`
+  )
 }
