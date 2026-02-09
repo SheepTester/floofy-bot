@@ -43,9 +43,13 @@ export default class CachedMap<T> {
   }
 
   async save (): Promise<void> {
-    await fs.writeFile(
-      this.#path,
-      JSON.stringify(this.#object, null, '\t') + '\n'
-    )
+    // If two `save`s are running at the same time, then at the very least
+    // `writeFile` will be writing to separate files, so whatever ends up
+    // getting renamed to `this.#path` will be a complete, valid JSON file
+    const tmpPath = `${this.#path}-${Date.now()}-${String(Math.random()).slice(
+      2
+    )}.tmp`
+    await fs.writeFile(tmpPath, JSON.stringify(this.#object, null, '\t') + '\n')
+    await fs.rename(tmpPath, this.#path)
   }
 }
