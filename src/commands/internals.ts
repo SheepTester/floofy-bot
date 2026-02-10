@@ -26,36 +26,64 @@ function displayResults (results: Results): string {
     .join('')
 }
 
+async function prepareUpdate (
+  message: Message,
+  results: Results
+): Promise<void> {
+  async function reportExec (command: string) {
+    results.push(`$ ${command}`)
+    await message.edit(displayResults(results))
+    const { error, stdout, stderr } = await execute(command)
+    results.push(stdout, stderr)
+    if (error) {
+      results.push(error?.stack)
+    }
+    await message.edit(displayResults(results))
+    if (error) {
+      throw error
+    }
+  }
+
+  await reportExec('git checkout -- package-lock.json')
+  await reportExec('git pull')
+  await reportExec('npm install')
+  await reportExec('npx playwright install firefox')
+  await reportExec('npm run build')
+}
+
 export async function exit (message: Message): Promise<void> {
   if (message.author.id === process.env.OWNER) {
     const msg = await message.reply(
       select(['okay BYE', 'i go POOF now', 'weeee'])
     )
-    console.log('Restarting')
     const results: Results = []
 
-    async function reportExec (command: string) {
-      results.push(`$ ${command}`)
-      await msg.edit(displayResults(results))
-      const { error, stdout, stderr } = await execute(command)
-      results.push(stdout, stderr)
-      if (error) {
-        results.push(error?.stack)
-      }
-      await msg.edit(displayResults(results))
-      if (error) {
-        throw error
-      }
-    }
-
-    await reportExec('git checkout -- package-lock.json')
-    await reportExec('git pull')
-    await reportExec('npm install')
-    await reportExec('npx playwright install firefox')
-    await reportExec('npm run build')
+    console.log('Restarting')
+    prepareUpdate(msg, results)
     results.push('Exiting...')
     await msg.edit(displayResults(results))
     process.exit()
+  } else {
+    await message.reply(
+      select([
+        'shoo',
+        `you are not <@${process.env.OWNER}>`,
+        'out of here commoner',
+        'scram plebian'
+      ])
+    )
+  }
+}
+
+export async function softUpdate (message: Message): Promise<void> {
+  if (message.author.id === process.env.OWNER) {
+    const msg = await message.reply(select(['mmk', 'okie dokie', 'aight']))
+    const results: Results = []
+
+    console.log('Soft updating')
+    prepareUpdate(msg, results)
+    results.push('Done')
+    await msg.edit(displayResults(results))
   } else {
     await message.reply(
       select([

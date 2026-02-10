@@ -63,6 +63,7 @@ async function help (message: Message): Promise<void> {
 const ownerCommands: Record<string, Command> = {
   'ignore us please': cmd.ignore.ignore,
   exeunt: cmd.internals.exit,
+  'soft update': cmd.internals.softUpdate,
   'memory usage': cmd.internals.memUsage,
   'debug scraper': cmd.freeFood.debugScraper
 }
