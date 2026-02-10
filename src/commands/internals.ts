@@ -59,7 +59,7 @@ export async function exit (message: Message): Promise<void> {
     const results: Results = []
 
     console.log('Restarting')
-    prepareUpdate(msg, results)
+    await prepareUpdate(msg, results)
     results.push('Exiting...')
     await msg.edit(displayResults(results))
     process.exit()
@@ -81,7 +81,7 @@ export async function softUpdate (message: Message): Promise<void> {
     const results: Results = []
 
     console.log('Soft updating')
-    prepareUpdate(msg, results)
+    await prepareUpdate(msg, results)
     results.push('Done')
     await msg.edit(displayResults(results))
   } else {
