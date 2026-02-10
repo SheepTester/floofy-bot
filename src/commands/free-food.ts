@@ -1191,11 +1191,17 @@ export class FreeFoodScraper {
           callback: result => {
             if (result.success) {
               total += result.eventsAdded ?? (oldStories++, 0)
-              geminiStatus[index] = result.eventsAdded !== null ? ':' : '.'
+              geminiStatus[index] = getSymbolFor(
+                result.eventsAdded !== null
+                  ? 'gemini-success-events-added'
+                  : 'gemini-success-no-events'
+              )
               return true
             } else {
               failStories++
-              geminiStatus[index] = result.shouldContinue ? 'U' : 'x'
+              geminiStatus[index] = getSymbolFor(
+                result.shouldContinue ? 'gemini-fail-no-array' : 'gemini-failed'
+              )
               return result.shouldContinue
             }
           }
@@ -1221,11 +1227,17 @@ export class FreeFoodScraper {
         callback: result => {
           if (result.success) {
             total += result.eventsAdded ?? (oldPosts++, 0)
-            geminiStatus[index] = result.eventsAdded !== null ? '_' : '.'
+            geminiStatus[index] = getSymbolFor(
+              result.eventsAdded !== null
+                ? 'gemini-success-events-added'
+                : 'gemini-success-no-events'
+            )
             return true
           } else {
             failPosts++
-            geminiStatus[index] = result.shouldContinue ? 'U' : 'x'
+            geminiStatus[index] = getSymbolFor(
+              result.shouldContinue ? 'gemini-fail-no-array' : 'gemini-failed'
+            )
             return result.shouldContinue
           }
         }
@@ -1485,3 +1497,22 @@ const displayScrapeStats = ({
   totalUsers
 }: ScrapeStats) =>
   `Scraped ${stories} stories from ${users} of ${totalUsers} users, and ${posts} posts.\n\n${note}`
+
+const getSymbolFor = (
+  meaning:
+    | 'gemini-success-events-added'
+    | 'gemini-success-no-events'
+    | 'gemini-fail-no-array'
+    | 'gemini-failed'
+) => {
+  switch (meaning) {
+    case 'gemini-success-events-added':
+      return '+'
+    case 'gemini-success-no-events':
+      return '0'
+    case 'gemini-fail-no-array':
+      return '!'
+    case 'gemini-failed':
+      return '-'
+  }
+}

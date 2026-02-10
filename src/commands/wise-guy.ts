@@ -47,7 +47,7 @@ export const onReady = wiseGuyState.read
 const genericResponses = [
   'no',
   '👍',
-  'I--',
+  'i--',
   'haha',
   'okay',
   'lmao',
@@ -79,9 +79,15 @@ const genericResponses = [
   'Well, first off, what you just said was incredibly rude adn disturbing. Please ask yourself...\nIs what I have to say\nT - TRUE\nK- Kind\nN- Necesary\nRespectful???\nNO? WELL I THOUGHT NOT BUDDY! GETTOUTA HERE',
   "HEY buddyyyy why don't you *EASE YOUR GODDAMN TONE UP A BIT* is that too much to ask??? This is a kind server where we don't swear or do any mean stuff like that.\nSO! Why don't you take your toxicity out of here?**hmm??**\nI thought so.😤",
   'interesting',
+  'curious',
+  'intriguing',
+  'say more',
   'embarrassing',
+  'cringe',
   'sybau',
-  'holy shit'
+  'holy shit',
+  'perhaps',
+  '🥀'
 ]
 
 /** e.g. to "there's this guy at this cafe ..." */
@@ -109,7 +115,13 @@ const startersOnly = [
   'yeaaa thats what I like to see guys! good job!!!!',
   "And that's when *I* said 'ha me too' and everyone erupted into laughter!",
   'GET YOUR FACTS STRAIGHT...\nout here we use **RELIABLE** sources... ever heard of them sweaty???\nNO? I thought not... wikipedia si not a reliable source! It can be edited willy nilly by ANYBODY!',
-  'perfect way to start *my* day if you ask me. you know, that reminds me: how did I get here anyway? Well, I was walking down the road when I fell into a ditch. BUT THEN, a bright, heavenly, angelic light appeared from above. I knew who it was: the cops! So what I did was turned and ran...'
+  'perfect way to start *my* day if you ask me. you know, that reminds me: how did I get here anyway? Well, I was walking down the road when I fell into a ditch. BUT THEN, a bright, heavenly, angelic light appeared from above. I knew who it was: the cops! So what I did was turned and ran...',
+  'yet you participate in society. curious!',
+  'many such cases',
+  'many people are saying this',
+  '^ this.',
+  '👆🤓',
+  'cooked'
 ]
 
 /** e.g. to "@moofy-bot" */
@@ -124,11 +136,17 @@ const repliesOnly = [
   "now, OKAY buddy? ya wanna go? ya wanna call me a dumb bot?\nguess what I'M FRIGGING IMMORTAL ok?",
   "goddamnit not again.. YOU KNOW WHAT???\nI'm just trying to live my life. OK?\nIS THAT too goddamn MUCH TO AKS??!",
   "omg sorrrrrrry don't 𝖻𝖺𝗇 me I'm just going thru a tough time in life ok?\nlike I really apologize its just that things have been tough lately and my neural net is racing and everything is so crazy and I don't know what to do.\n😢 pls forgive me",
-  '67..\nHA bet u thought that was funny huh'
+  '67..\nHA bet u thought that was funny huh',
+  'please enjoy each response equally',
+  'my work is mysterious and important',
+  'i am very intelligent',
+  'sad!',
+  'so annoying'
 ]
 
 function generateMessage (
   content: string,
+  username: string,
   isStarter: boolean,
   blocklist: string[]
 ): string | null {
@@ -137,9 +155,10 @@ function generateMessage (
   }
   const pool = [
     ...genericResponses,
-    ...(isStarter ? startersOnly : repliesOnly)
+    ...(isStarter ? startersOnly : repliesOnly),
+    `thank you ${username}, very cool`
   ]
-  if (content === '😭') {
+  if (content.includes('😭')) {
     for (let i = 0; i < 10; i++) {
       pool.push(
         "I noticed that you used \"😭\" in your sentence. Just wanted to say, don't give up anything in your life. I don't know what you're going through but there's always help"
@@ -151,6 +170,11 @@ function generateMessage (
       pool.push(
         '"HELP" I\'m not the ambulance lil bro 🚑🚑🚑🚨🚨🚨🚨🙏🙏🙏🙏🔥😭😭 I ain\'t calling da hospital to help yo musty ahh 😭🙏🙏🙏🙏🙏'
       )
+    }
+  }
+  if (/^perchance\.?$/i.test(content)) {
+    for (let i = 0; i < 10; i++) {
+      pool.push('you cant just say "perchance"')
     }
   }
   const filtered = pool.filter(phrase => !blocklist.includes(phrase))
@@ -192,10 +216,15 @@ export async function onMessage (message: Message): Promise<boolean> {
   } else {
     return false
   }
-  const reply = generateMessage(message.content, isStarter, [
-    state.message,
-    ...state.replies
-  ])
+  const reply = generateMessage(
+    message.content,
+    // A bit dangerous but at least shouldn't be capable of pinging anyone, I
+    // hope
+    message.member?.displayName.replaceAll('@', ' @ ') ??
+      `<@${message.author.id}>`,
+    isStarter,
+    [state.message, ...state.replies]
+  )
   if (!reply) {
     return false
   }
