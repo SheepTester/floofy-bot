@@ -12,12 +12,13 @@ const DEFAULT_FREQ = 0.01
  */
 const STARTER_COOLDOWN = 73 * 60 * 1000
 /**
- * Conversational mode lasts for 3 min
+ * Conversational mode lasts for 25 min in the same channel
  */
-const CONVERSATIONAL_MODE_DURATION = 3 * 60 * 1000
+const CONVERSATIONAL_MODE_DURATION = 25 * 60 * 1000
 
 type LastWiseGuy = {
   time: number
+  channelId?: string
   message: string
   replies: string[]
   /** Old key */
@@ -188,8 +189,12 @@ function generateMessage (
  * @returns whether the bot sent a message
  */
 export async function onMessage (message: Message): Promise<boolean> {
-  if (!message.guildId || message.author.bot) {
-    // Ignore DMs and bots
+  if (
+    !message.guildId ||
+    message.author.bot ||
+    message.author.id === '303745722488979456'
+  ) {
+    // Ignore DMs and bots and Nick
     return false
   }
   const state = wiseGuyState.get(message.guildId, DEFAULT_STATE)
@@ -202,8 +207,11 @@ export async function onMessage (message: Message): Promise<boolean> {
     } else {
       return false
     }
-  } else if (timeSinceLast <= CONVERSATIONAL_MODE_DURATION) {
-    // Only respond to mentions
+  } else if (
+    timeSinceLast <= CONVERSATIONAL_MODE_DURATION &&
+    message.channelId === state.channelId
+  ) {
+    // Conversational mode: only respond to mentions
     if (
       message.mentions.has(message.client.user) ||
       /\bmoofy\b/i.test(message.content)
@@ -235,6 +243,7 @@ export async function onMessage (message: Message): Promise<boolean> {
         ? {
           time: Date.now(),
           message: reply,
+          channelId: message.channelId,
           replies: [],
           guildFrequency2: state.guildFrequency2
         }
