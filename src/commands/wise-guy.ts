@@ -189,12 +189,8 @@ function generateMessage (
  * @returns whether the bot sent a message
  */
 export async function onMessage (message: Message): Promise<boolean> {
-  if (
-    !message.guildId ||
-    message.author.bot ||
-    message.author.id === '303745722488979456'
-  ) {
-    // Ignore DMs and bots and Nick
+  if (!message.guildId || message.author.bot) {
+    // Ignore DMs and bots
     return false
   }
   const state = wiseGuyState.get(message.guildId, DEFAULT_STATE)
@@ -202,6 +198,10 @@ export async function onMessage (message: Message): Promise<boolean> {
   let isStarter
   if (timeSinceLast >= STARTER_COOLDOWN) {
     if (Math.random() < (state.guildFrequency2 ?? DEFAULT_FREQ)) {
+      if (message.author.id === '303745722488979456') {
+        // Opt Nick out of starters
+        return false
+      }
       // Send a starter
       isStarter = true
     } else {
