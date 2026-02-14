@@ -17,7 +17,8 @@ function isPollChannel (message: PartialMessage | Message): boolean {
 }
 function isPoll (message: Message): boolean {
   return (
-    isPollChannel(message) || !!message.content?.includes('(this is a poll)')
+    isPollChannel(message) ||
+    !!message.content.toLowerCase().includes('(this is a poll)')
   )
 }
 
