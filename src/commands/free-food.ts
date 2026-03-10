@@ -837,13 +837,15 @@ export class FreeFoodScraper {
         throw new Error('expected some story usernames on page load')
       }
 
-      // Close "Turn on Notifications" by clicking on "Not Now." Class names
-      // appear to be stable because even Gemini knows about them, and I've
-      // referenced these class names in a modal-blocking userstyle before
-      const notNowBtn = page.locator('css=._a9--._a9_1')
-      if ((await notNowBtn.count()) > 0) {
-        await notNowBtn.click()
-      }
+      // Close "Turn on Notifications" when it appears by clicking on "Not Now."
+      // Class names appear to be stable because even Gemini knows about them,
+      // and I've referenced these class names in a modal-blocking userstyle
+      // before
+      page
+        .locator('css=._a9--._a9_1')
+        .click({ timeout: 0 })
+        .then(() => console.log('[misc] Closed "Turn on Notifications"'))
+        .catch(() => {})
 
       this.#log('[browser] Scrolling down posts...')
       for (let i = 0; i < POST_PAGES; i++) {
