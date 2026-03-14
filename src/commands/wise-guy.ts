@@ -151,7 +151,8 @@ function generateMessage (
   isStarter: boolean,
   blocklist: string[]
 ): string | null {
-  if (/\bWordle \d+ X\/6\b/.test(content) && !blocklist.includes('loser')) {
+  // For some reason Discord Wordle doesn't put a comma, but web Wordle does
+  if (/\bWordle [\d,]+ X\/6\b/.test(content) && !blocklist.includes('loser')) {
     return 'loser'
   }
   const pool = [
