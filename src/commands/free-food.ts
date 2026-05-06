@@ -103,7 +103,7 @@ type EdgeNode = {
 type TimelinePostNode = {
   /** `null` if ad (i.e. this already filters out ads) */
   media: {
-    owner: {
+    owner?: {
       username: string
     }
     carousel_media:
@@ -115,7 +115,7 @@ type TimelinePostNode = {
         }[]
       | null
     code: string
-    /** same as `owner`?? */
+    /** same as `owner`?? but maybe it's always present? because `owner` sometimes can be absent ?? */
     user: {
       username: string
     }
@@ -591,9 +591,14 @@ export class FreeFoodScraper {
           const images: {
             image_versions2: { candidates: ImageV2Candidate[] }
           }[] = media.carousel_media ?? [media]
+          if (!media.user) {
+            this.#log(
+              `[graph ql] missing owner: ${Object.keys(media).join(', ')}`
+            )
+          }
           return [
             {
-              username: media.owner.username,
+              username: media.owner?.username ?? media.user.username,
               caption: media.caption?.text ?? '',
               imageUrls: images.map(({ image_versions2 }) =>
                 selectBest(image_versions2.candidates)
