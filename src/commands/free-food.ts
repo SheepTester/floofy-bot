@@ -335,11 +335,13 @@ type GeminiModel =
   | 'gemini-2.0-flash-lite'
   | 'gemini-2.5-flash'
   | 'gemini-2.5-flash-lite'
+  | 'gemma-4-31b-it'
 const modelPriority: GeminiModel[] = [
   'gemini-3-flash-preview',
   'gemini-3.1-flash-lite-preview',
   'gemini-2.5-flash',
-  'gemini-2.5-flash-lite'
+  'gemini-2.5-flash-lite',
+  'gemma-4-31b-it'
   // 'gemini-2.0-flash',
   // 'gemini-2.0-flash-lite'
 ]
@@ -484,10 +486,9 @@ export class FreeFoodScraper {
       })
       const value = JSON.parse(
         // sometimes will generate `"minute": 05` or `00`
-        result.text?.replace(
-          /"minute":\s*0+([0-9])/,
-          (_, digit) => `"minute": ${digit}`
-        ) ?? '{}'
+        result.text
+          ?.replace(/"minute":\s*0+([0-9])/, (_, digit) => `"minute": ${digit}`)
+          .replace(/```(?:json)?/g, '') ?? '{}'
       )
       if (!Array.isArray(value)) {
         console.error(result)
@@ -964,9 +965,7 @@ export class FreeFoodScraper {
             )
             return { success: true, usernames }
           })
-        if (usernames.success) {
-          this.#log(`[username] Usernames: ${JSON.stringify(usernames)}`)
-        } else {
+        if (!usernames.success) {
           this.#log(`[username] No translate parent\n${usernames.output}`)
         }
         let username = usernames.usernames?.[1]
