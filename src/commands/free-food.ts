@@ -260,16 +260,32 @@ type InsertStats = ScrapeStats & {
  *   that as the event start date, so the post time isn't included in the prompt
  * - added "tangible" to filter by food and merch and exclude things like "free
  *   admission"
+ * - gemma 4 will often end the JSON with ```
+ * - exclude raffles/giveaways
+ * - exclude borrowed items (e.g. pickleball paddles)
+ * - exclude arts & crafts
  */
-const schemaPrompt = `output only a JSON array of event objects without any explanation or formatting, whose contents each conform to the following schema.
+const schemaPrompt = `
+Output only a JSON array of event objects without any explanation or formatting. Each object conforms to the following schema.
 
 {
-  "provided": string[], // List of tangible items (i.e. food and merch) provided at the event, if any, using the original phrasing from the post (e.g. "Dirty Birds", "Tapex", "boba", "refreshments", "snacks", "food", "T-shirt"). Exclude items that must be purchased (e.g. fundraisers or discounts).
+  "provided": string[], // List of tangible items (i.e. food and merch) provided at the event, if any, using the original phrasing from the post (e.g. "Dirty Birds", "Tapex", "boba", "refreshments", "snacks", "food", "T-shirt").
   "location": string,
   "date": { "year": number; "month": number; "date": number }, // Month is between 1 and 12
   "start": { "hour": number; "minute": number }, // 24-hour format. Tip: something like "6-9 pm" is the same as "6 pm to 9 pm"
   "end": { "hour": number; "minute": number } // 24-hour format, optional and omitted if no end time specified
-}`
+}
+
+Include in "provided":
+- Items that can be consumed (e.g. food, beverages)
+- Items that can be taken home (e.g. "free blankets")
+
+NOT counted as "provided":
+- Items that must be purchased (e.g. fundraisers or discounts)
+- Raffles, opportunity drawings, giveaways
+- Items that cannot be taken home (e.g. "blankets provided")
+- Experiences (e.g. movies, arts & crafts, "fun")
+`.trim()
 const responseJsonSchema = {
   type: 'array',
   items: {
@@ -467,9 +483,9 @@ export class FreeFoodScraper {
           ),
           {
             text:
-              `Using the following flyer${images.length !== 1 ? 's' : ''}${
+              `The following flyer${images.length !== 1 ? 's' : ''}${
                 caption ? ' and caption' : ''
-              }, which was posted ${fmt.format(timestamp)}, ${schemaPrompt}` +
+              } was posted ${fmt.format(timestamp)}. ${schemaPrompt}` +
               (caption ? '\n\n' + caption : '')
           }
         ],
