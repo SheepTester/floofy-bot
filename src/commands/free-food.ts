@@ -657,6 +657,9 @@ export class FreeFoodScraper {
     }
   }
 
+  /**
+   * @returns null if already added, else number of events (may be 0)
+   */
   async #insertIfNew (
     sourceId: string,
     url: string,
@@ -1199,7 +1202,11 @@ export class FreeFoodScraper {
       priority: number
       callback: (
         result:
-          | { success: true; eventsAdded: number | null }
+          | {
+              success: true
+              /** null if already added, else number of events (may be 0) */
+              eventsAdded: number | null
+            }
           | { success: false; shouldContinue: boolean }
       ) => boolean
     }[] = []
@@ -1226,8 +1233,10 @@ export class FreeFoodScraper {
               total += result.eventsAdded ?? (oldStories++, 0)
               geminiStatus[index] = getSymbolFor(
                 result.eventsAdded !== null
-                  ? 'gemini-success-events-added'
-                  : 'gemini-success-no-events'
+                  ? result.eventsAdded > 0
+                    ? 'gemini-success-events-added'
+                    : 'gemini-success-no-events'
+                  : 'gemini-success-already-added'
               )
               return true
             } else {
@@ -1262,8 +1271,10 @@ export class FreeFoodScraper {
             total += result.eventsAdded ?? (oldPosts++, 0)
             geminiStatus[index] = getSymbolFor(
               result.eventsAdded !== null
-                ? 'gemini-success-events-added'
-                : 'gemini-success-no-events'
+                ? result.eventsAdded > 0
+                  ? 'gemini-success-events-added'
+                  : 'gemini-success-no-events'
+                : 'gemini-success-already-added'
             )
             return true
           } else {
@@ -1535,6 +1546,7 @@ const getSymbolFor = (
   meaning:
     | 'gemini-success-events-added'
     | 'gemini-success-no-events'
+    | 'gemini-success-already-added'
     | 'gemini-fail-no-array'
     | 'gemini-failed'
 ) => {
@@ -1543,6 +1555,8 @@ const getSymbolFor = (
       return '+'
     case 'gemini-success-no-events':
       return '0'
+    case 'gemini-success-already-added':
+      return '='
     case 'gemini-fail-no-array':
       return '!'
     case 'gemini-failed':
