@@ -475,14 +475,12 @@ export class FreeFoodScraper {
       result = await this.#model.ai.models.generateContent({
         model: this.#model.model,
         contents: [
-          ...images.map(
-            (buffer): Part => ({
-              inlineData: {
-                data: Buffer.from(buffer).toString('base64'),
-                mimeType: 'image/jpeg'
-              }
-            })
-          ),
+          ...images.map((buffer): Part => ({
+            inlineData: {
+              data: Buffer.from(buffer).toString('base64'),
+              mimeType: 'image/jpeg'
+            }
+          })),
           {
             text:
               `The following flyer${images.length !== 1 ? 's' : ''}${
@@ -699,19 +697,17 @@ export class FreeFoodScraper {
         .toBuffer()
       const previewData = buffer.toString('base64')
       await collection.insertMany(
-        events.map(
-          ({ provided, ...event }): ScrapedEvent => ({
-            freeFood: provided,
-            ...event,
-            sourceId,
-            url,
-            previewData,
-            postTimestamp: timestamp,
-            caption,
-            scraped: Date.now(),
-            result: true
-          })
-        )
+        events.map(({ provided, ...event }): ScrapedEvent => ({
+          freeFood: provided,
+          ...event,
+          sourceId,
+          url,
+          previewData,
+          postTimestamp: timestamp,
+          caption,
+          scraped: Date.now(),
+          result: true
+        }))
       )
     } else {
       await collection.insertOne({

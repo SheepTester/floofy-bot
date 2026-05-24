@@ -6,12 +6,10 @@ const regexCache: Record<string, RegExp> = {}
 function findColon (string: string): number {
   let index = string.indexOf(':')
   while (index !== -1) {
-    if (
-      !(
-        string[index - 1] === '<' ||
-        (string[index - 1] === 'a' && string[index - 2] === '<')
-      )
-    ) {
+    if (!(
+      string[index - 1] === '<' ||
+      (string[index - 1] === 'a' && string[index - 2] === '<')
+    )) {
       return index + 1
     }
     index = string.indexOf(':', index + 1)

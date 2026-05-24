@@ -53,16 +53,14 @@ export async function getReports (fileName: string): Promise<Report[]> {
       const { items } = await page.getTextContent()
       const textObjects = items
         .filter(item => 'transform' in item)
-        .map(
-          (item): TextObject => ({
-            content: item.str,
-            hasEol: item.hasEOL,
-            x: item.transform[4],
-            y: item.transform[5],
-            width: item.width,
-            height: item.height
-          })
-        )
+        .map((item): TextObject => ({
+          content: item.str,
+          hasEol: item.hasEOL,
+          x: item.transform[4],
+          y: item.transform[5],
+          width: item.width,
+          height: item.height
+        }))
         .sort(
           // Sort from top to bottom, then left to right
           (a, b) => (Math.abs(a.y - b.y) > 0.1 ? b.y - a.y : a.x - b.x)
@@ -305,25 +303,21 @@ export function init (client: Client): void {
       return
     }
     const descriptions = group(display(await getReports(fileName)))
-    const embeds = descriptions.map(
-      (description, i): APIEmbed => ({
-        title:
-          descriptions.length === 1
-            ? fileName
-            : `${fileName} (${i + 1}/${descriptions.length})`,
-        url:
-          BASE_URL +
-          encodeURIComponent(fileName) +
-          (i === 0 ? '' : `#${i + 1}`),
-        description,
-        footer:
-          i === descriptions.length - 1
-            ? {
-              text: 'To turn off, reply "i renounce my life of crime"'
-            }
-            : undefined
-      })
-    )
+    const embeds = descriptions.map((description, i): APIEmbed => ({
+      title:
+        descriptions.length === 1
+          ? fileName
+          : `${fileName} (${i + 1}/${descriptions.length})`,
+      url:
+        BASE_URL + encodeURIComponent(fileName) + (i === 0 ? '' : `#${i + 1}`),
+      description,
+      footer:
+        i === descriptions.length - 1
+          ? {
+            text: 'To turn off, reply "i renounce my life of crime"'
+          }
+          : undefined
+    }))
     seen.set(fileName, 1)
     await seen.save()
     for (const [channelId] of channels) {

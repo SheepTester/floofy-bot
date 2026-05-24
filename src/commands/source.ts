@@ -45,26 +45,26 @@ export async function getSource (
     // code block or has custom emoji, upload a text file
     files: useFile
       ? [
-          new AttachmentBuilder(Buffer.from(msg.content), {
-            name: 'message.txt'
-          })
-        ]
+        new AttachmentBuilder(Buffer.from(msg.content), {
+          name: 'message.txt'
+        })
+      ]
       : undefined,
     embeds: useFile
       ? undefined
       : [
-          {
-            title: select(['conTENT', 'source', 'wow', 'very cool']),
-            description:
-              msg.content.length > 0
-                ? `\`\`\`md\n${msg.content}\n\`\`\``
-                : select([
-                    '*the message is EMPTY*',
-                    '*there is NOTHING*',
-                    '*no message CONTENT very interest*'
-                  ])
-          }
-        ]
+        {
+          title: select(['conTENT', 'source', 'wow', 'very cool']),
+          description:
+            msg.content.length > 0
+              ? `\`\`\`md\n${msg.content}\n\`\`\``
+              : select([
+                '*the message is EMPTY*',
+                '*there is NOTHING*',
+                '*no message CONTENT very interest*'
+              ])
+        }
+      ]
   })
 }
 

@@ -52,8 +52,8 @@ export async function whoPinged (
     targetId === 'everyone'
       ? 'everyone'
       : targetId === message.author.id
-      ? 'you'
-      : 'them'
+        ? 'you'
+        : 'them'
   if (lastMention) {
     await message.reply({
       embeds: [

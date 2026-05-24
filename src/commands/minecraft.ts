@@ -90,21 +90,21 @@ export async function serverStatus (message: Message, [address]: string[]) {
           description:
             online > 0
               ? players
-                  .map(
-                    ({ name, id }) =>
-                      `[${name}](https://namemc.com/profile/${id})`
-                  )
-                  .join('\n') ||
-                select([
-                  "server not showing who's on",
-                  'no players provided',
-                  'the servers hiding something...'
-                ])
+                .map(
+                  ({ name, id }) =>
+                    `[${name}](https://namemc.com/profile/${id})`
+                )
+                .join('\n') ||
+              select([
+                "server not showing who's on",
+                'no players provided',
+                'the servers hiding something...'
+              ])
               : select([
-                  "no one's on :(",
-                  'dead server',
-                  'everyone touching grass today'
-                ]),
+                "no one's on :(",
+                'dead server',
+                'everyone touching grass today'
+              ]),
           footer: {
             text: version
           }
@@ -162,26 +162,24 @@ async function check (
   const { online, max, players } = await getServerStatus(
     info.host,
     info.port
-  ).catch(
-    (): ServerStatus => ({
-      online: 0,
-      max: -1,
-      players: [],
-      version: ''
-    })
-  )
+  ).catch((): ServerStatus => ({
+    online: 0,
+    max: -1,
+    players: [],
+    version: ''
+  }))
   const embeds = start
     ? players.map(createEmbed(' was already on.'))
     : [
-        // Joined
-        ...players
-          .filter(({ id }) => !state.lastPlayers.some(p => p.id === id))
-          .map(createEmbed(' joined the game.', 0x22c55e)),
-        // Left
-        ...state.lastPlayers
-          ?.filter(({ id }) => !players.some(p => p.id === id))
-          .map(createEmbed(' left the game.', 0xef4444))
-      ]
+      // Joined
+      ...players
+        .filter(({ id }) => !state.lastPlayers.some(p => p.id === id))
+        .map(createEmbed(' joined the game.', 0x22c55e)),
+      // Left
+      ...state.lastPlayers
+        ?.filter(({ id }) => !players.some(p => p.id === id))
+        .map(createEmbed(' left the game.', 0xef4444))
+    ]
   if (start || embeds.length > 0) {
     await channel.send({
       content: `${online}/${Math.max(
