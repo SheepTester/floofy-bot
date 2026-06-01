@@ -873,7 +873,7 @@ export class FreeFoodScraper {
       page
         .locator('css=._a9--._a9_1')
         .click({ timeout: 0 })
-        .then(() => console.log('[misc] Closed "Turn on Notifications"'))
+        .then(() => this.#log('[misc] Closed "Turn on Notifications"'))
         .catch(() => {})
 
       this.#log('[browser] Scrolling down posts...')
