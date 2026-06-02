@@ -827,6 +827,7 @@ export class FreeFoodScraper {
     page.on('crash', () => this.#log('[page] CRASHED'))
 
     const promises: Promise<void>[] = []
+    let ended = false
     try {
       page.on('response', response => {
         promises.push(this.#handleResponse(response))
@@ -870,11 +871,14 @@ export class FreeFoodScraper {
       // Class names appear to be stable because even Gemini knows about them,
       // and I've referenced these class names in a modal-blocking userstyle
       // before
-      page
-        .locator('css=._a9--._a9_1')
-        .click({ timeout: 0 })
-        .then(() => this.#log('[misc] Closed "Turn on Notifications"'))
-        .catch(() => {})
+      ;(async () => {
+        try {
+          while (!ended) {
+            await page.locator('css=._a9--._a9_1').click({ timeout: 0 })
+            this.#log('[misc] Closed "Turn on Notifications"')
+          }
+        } catch {}
+      })()
 
       this.#log('[browser] Scrolling down posts...')
       for (let i = 0; i < POST_PAGES; i++) {
@@ -1180,6 +1184,7 @@ export class FreeFoodScraper {
       note += this.#getUsernameScrapeStatus()
       onBrowserEnd?.(error, { ...this.#stats(), note })
     } finally {
+      ended = true
       this.#log(
         `[browser] closing browser. ${
           page.isClosed() ? 'page already closed ??' : 'page still open'
@@ -1238,7 +1243,7 @@ export class FreeFoodScraper {
                   ? result.eventsAdded > 0
                     ? 'gemini-success-events-added'
                     : 'gemini-success-no-events'
-                  : 'gemini-success-already-added'
+                  : 'already-added'
               )
               return true
             } else {
@@ -1276,7 +1281,7 @@ export class FreeFoodScraper {
                 ? result.eventsAdded > 0
                   ? 'gemini-success-events-added'
                   : 'gemini-success-no-events'
-                : 'gemini-success-already-added'
+                : 'already-added'
             )
             return true
           } else {
@@ -1548,7 +1553,7 @@ const getSymbolFor = (
   meaning:
     | 'gemini-success-events-added'
     | 'gemini-success-no-events'
-    | 'gemini-success-already-added'
+    | 'already-added'
     | 'gemini-fail-no-array'
     | 'gemini-failed'
 ) => {
@@ -1557,7 +1562,7 @@ const getSymbolFor = (
       return '+'
     case 'gemini-success-no-events':
       return '0'
-    case 'gemini-success-already-added':
+    case 'already-added':
       return '='
     case 'gemini-fail-no-array':
       return '!'
