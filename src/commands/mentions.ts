@@ -1,15 +1,26 @@
 import { Message } from 'discord.js'
 import select from '../utils/select'
+import { db } from '../utils/db'
 
 type LastPing = {
   author: string
   content: string
-  url: string
-  role?: boolean
+  message_url: string
+  is_role: 0 | 1
 }
 
-const mentionCache = new CachedMap<LastPing>('./data/mentions.json')
-await mentionCache.read()
+const addMention = db.prepare(
+  [
+    'insert or replace into mentions (channel_id, mentioned, author, content, message_url, is_role)',
+    'values (?, ?, ?, ?, ?, ?)'
+  ].join(' ') + ';'
+)
+const getLastMention = db.prepare(
+  [
+    'select author, content, message_url, is_role from mentions',
+    'where channel_id = ? and mentioned = ?'
+  ].join(' ') + ';'
+)
 
 export async function onMessage (message: Message): Promise<void> {
   const {
@@ -17,24 +28,19 @@ export async function onMessage (message: Message): Promise<void> {
     mentions
   } = message
   if (mentions.everyone || mentions.roles.size > 0 || mentions.users.size > 0) {
-    const msg = {
-      author: message.author.id,
-      content: message.content,
-      url: message.url
-    }
+    const msg = [message.author.id, message.content, message.url]
     if (mentions.everyone) {
-      mentionCache.set(`${channelId}-everyone`, msg)
+      addMention.run(channelId, 'everyone', ...msg, 0)
     }
     for (const roleId of mentions.roles.keys()) {
-      mentionCache.set(`${channelId}-${roleId}`, { ...msg, role: true })
+      addMention.run(channelId, roleId, ...msg, 1)
     }
     // Ignore user pings from this bot
     if (message.author.id !== message.client.user!.id) {
       for (const userId of mentions.users.keys()) {
-        mentionCache.set(`${channelId}-${userId}`, msg)
+        addMention.run(channelId, userId, ...msg, 0)
       }
     }
-    mentionCache.save()
   }
 }
 
@@ -46,7 +52,8 @@ export async function whoPinged (
     args.length < 2 && message.content.includes('everyone')
       ? ['everyone', args[0]]
       : args
-  const lastMention = mentionCache.get(`${channelId}-${targetId}`)
+  const lastMention = getLastMention.get(channelId, targetId) as
+    LastPing | undefined
   const them =
     targetId === 'everyone'
       ? 'everyone'
@@ -62,13 +69,13 @@ export async function whoPinged (
           description: `<@${lastMention.author}> pinged ${
             targetId === 'everyone'
               ? '@everyone'
-              : `<@${lastMention.role ? '&' : ''}${targetId}>`
+              : `<@${lastMention.is_role ? '&' : ''}${targetId}>`
           } ([link to message](${
-            lastMention.url
+            lastMention.message_url
           })):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`,
           footer: {
             text:
-              !lastMention.role && targetId !== 'everyone'
+              !lastMention.is_role && targetId !== 'everyone'
                 ? "this only shows direct pings to the user, btw, it doesn't factor in role and everyone pings"
                 : ''
           }
@@ -105,11 +112,17 @@ export async function whoPingedMe (
   message: Message,
   [channelId = message.channel.id]: string[]
 ): Promise<void> {
-  const userMention = mentionCache.get(`${channelId}-${message.author.id}`)
-  const possibilities = [mentionCache.get(`${channelId}-everyone`), userMention]
+  const userMention = getLastMention.get(channelId, message.author.id) as
+    LastPing | undefined
+  const possibilities = [
+    getLastMention.get(channelId, 'everyone') as LastPing | undefined,
+    userMention
+  ]
   if (message.member) {
     for (const roleId of message.member.roles.cache.keys()) {
-      possibilities.push(mentionCache.get(`${channelId}-${roleId}`))
+      possibilities.push(
+        getLastMention.get(channelId, roleId) as LastPing | undefined
+      )
     }
   }
   const lastMention = possibilities.reduce(
@@ -119,7 +132,8 @@ export async function whoPingedMe (
       // u64 to a f64 should be negligible.
       !acc ||
       (curr &&
-        +acc.url.split('/').slice(-1)[0] < +curr.url.split('/').slice(-1)[0])
+        +acc.message_url.split('/').slice(-1)[0] <
+          +curr.message_url.split('/').slice(-1)[0])
         ? curr
         : acc,
     undefined
@@ -129,7 +143,7 @@ export async function whoPingedMe (
       embeds: [
         {
           description: `<@${lastMention.author}> [pinged you](${
-            lastMention.url
+            lastMention.message_url
           }):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`,
           footer: {
             text:

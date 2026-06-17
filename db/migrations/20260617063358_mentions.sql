@@ -5,7 +5,7 @@ create table mentions (
   author text not null,
   content text not null,
   message_url text not null,
-  is_role text,
+  is_role boolean not null,
   primary key (channel_id, mentioned)
 );
 
