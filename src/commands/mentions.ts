@@ -1,5 +1,4 @@
 import { Message } from 'discord.js'
-import CachedMap from '../utils/CachedMap'
 import select from '../utils/select'
 
 type LastPing = {

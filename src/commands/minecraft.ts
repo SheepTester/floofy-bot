@@ -6,7 +6,6 @@ import {
 } from 'discord.js'
 import { Client, PacketWriter, State } from 'mcproto'
 import select from '../utils/select'
-import CachedMap from '../utils/CachedMap'
 
 type Player = {
   name: string

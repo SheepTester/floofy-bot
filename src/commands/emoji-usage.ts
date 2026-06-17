@@ -4,7 +4,6 @@ import {
   MessageReaction,
   type PartialMessageReaction
 } from 'discord.js'
-import CachedMap from '../utils/CachedMap'
 
 const customEmojiRegex = /<a?:\w+:(\d+)>/g
 

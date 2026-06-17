@@ -4,7 +4,6 @@ import {
   type PartialMessage,
   PermissionFlagsBits
 } from 'discord.js'
-import CachedMap from '../utils/CachedMap'
 import { emojiRegex } from '../utils/emoji-regex'
 import ok from '../utils/ok'
 import select from '../utils/select'

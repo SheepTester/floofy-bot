@@ -8,7 +8,6 @@ import {
 } from 'discord.js'
 import { getDocument, VerbosityLevel } from 'pdfjs-dist'
 import select from '../utils/select'
-import CachedMap from '../utils/CachedMap'
 
 type TextObject = {
   content: string
