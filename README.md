@@ -12,7 +12,7 @@ npm install
 npx playwright install firefox
 ```
 
-Edit `.env` per `.env.example`, then do
+Create `.env` based on `.env.example`, then do
 
 ```sh
 npm start
