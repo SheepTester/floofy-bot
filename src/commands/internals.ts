@@ -48,6 +48,7 @@ async function prepareUpdate (
   await reportExec('npm ci')
   await reportExec('npx playwright install firefox')
   await reportExec('npm run build')
+  await reportExec('npx dbmate up')
   await reportExec('pm2 reload floofy-bot')
 }
 

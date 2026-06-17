@@ -25,6 +25,10 @@ npm start
 npm run build
 # Auto-restart on code change
 npm run dev
+# Create a migration
+npx dbmate new <migration-name>
+# Apply migrations
+DATABASE_URL=db.db npx dbmate up
 ```
 
 ## Update `emoji.json`
