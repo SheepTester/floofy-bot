@@ -359,36 +359,3 @@ fs.ensureDir('./data/')
     console.error(err)
     process.exit(1)
   })
-
-const printTime = () =>
-  new Date().toLocaleString('ja-JP', {
-    timeZone: 'America/Los_Angeles'
-  })
-
-try {
-  const { EventLogger } = require('node-windows')
-  const log = new EventLogger('Floofy noises')
-
-  // These errors show in Event Viewer
-  const origLog = console.log
-  console.log = (...data) => {
-    log.info(data.join(' '))
-    origLog(data)
-  }
-  const origErr = console.error
-  console.error = error => {
-    log.error(`${error?.stack}`)
-    origErr(error)
-  }
-} catch (error) {
-  try {
-    fs.writeFileSync(
-      './data/EventLoggerError.txt',
-      `[${printTime()}] ${
-        error instanceof Error ? error.stack || error.message : error
-      }`
-    )
-  } catch {}
-}
-
-fs.writeFileSync('./data/last_pid.txt', `[${printTime()}] ${process.pid}`)
