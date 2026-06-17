@@ -10,7 +10,7 @@ import ok from '../utils/ok'
 import select from '../utils/select'
 
 const pollChannels = new CachedMap<boolean>('./data/poll-reactions.json')
-export const onReady = pollChannels.read
+await pollChannels.read()
 
 function isPollChannel (message: PartialMessage | Message): boolean {
   return pollChannels.get(message.channel.id, false)

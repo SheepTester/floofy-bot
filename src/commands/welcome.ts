@@ -21,8 +21,7 @@ const welcomeChannels = new CachedMap<WelcomeChannel>(
 const sentienceMsgSent = new CachedMap<boolean>(
   './data/sentience-msg-sent.json'
 )
-export const onReady = () =>
-  Promise.all([welcomeChannels.read(), sentienceMsgSent.read()])
+await Promise.all([welcomeChannels.read(), sentienceMsgSent.read()])
 
 export async function setWelcome (
   message: Message,

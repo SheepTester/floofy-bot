@@ -195,7 +195,7 @@ async function check (
 }
 
 const trackChannels = new CachedMap<TrackInfo>('./data/minecraft-track.json')
-export const onReady = trackChannels.read
+await trackChannels.read()
 const states: Record<string, TrackState> = {}
 
 export async function init (client: DiscordClient): Promise<void> {

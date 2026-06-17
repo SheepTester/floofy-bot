@@ -10,7 +10,7 @@ type LastPing = {
 }
 
 const mentionCache = new CachedMap<LastPing>('./data/mentions.json')
-export const onReady = mentionCache.read
+await mentionCache.read()
 
 export async function onMessage (message: Message): Promise<void> {
   const {

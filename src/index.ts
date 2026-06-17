@@ -338,33 +338,6 @@ process.on('uncaughtException', reason => {
   process.exit(1)
 })
 
-fs.mkdir('./data/', { recursive: true })
-  .then(() =>
-    Promise.all([
-      cmd.pollReactions.onReady(),
-      cmd.welcome.onReady(),
-      cmd.voteLockdown.onReady(),
-      cmd.mentions.onReady(),
-      cmd.emojiUsage.onReady(),
-      cmd.minecraft.onReady(),
-      cmd.ucpd.onReady(),
-      cmd.wiseGuy.onReady()
-    ])
-  )
-  .then(() => client.login(process.env.TOKEN))
-  .then(() =>
-    Promise.all([
-      cmd.minecraft.init(client),
-      cmd.ucpd.init(client),
-      cmd.freeFood.init(client)
-    ])
-  )
-  .then(() => console.log('Started!'))
-  .catch(err => {
-    console.error(err)
-    process.exit(1)
-  })
-
 const printTime = () =>
   new Date().toLocaleString('ja-JP', {
     timeZone: 'America/Los_Angeles'
@@ -397,3 +370,12 @@ try {
 }
 
 await fs.writeFile('./data/last_pid.txt', `[${printTime()}] ${process.pid}`)
+
+await fs.mkdir('./data/', { recursive: true })
+await client.login(process.env.TOKEN)
+await Promise.all([
+  cmd.minecraft.init(client),
+  cmd.ucpd.init(client),
+  cmd.freeFood.init(client)
+])
+console.log('Started!')
