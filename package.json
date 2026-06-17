@@ -16,13 +16,13 @@
     "mongodb": "^6.20.0",
     "pdfjs-dist": "^4.6.82",
     "playwright": "^1.55.0",
-    "sharp": "^0.34.4"
+    "sharp": "^0.34.4",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@sheeptester/prettier": "^3.9.0",
     "@types/fs-extra": "^9.0.13",
     "npm-run-all2": "^8.0.4",
-    "typescript": "^6.0.3",
-    "zod": "^4.1.11"
+    "typescript": "^6.0.3"
   }
 }

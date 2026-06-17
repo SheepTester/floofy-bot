@@ -5,6 +5,7 @@ import {
   type PartialMessageReaction
 } from 'discord.js'
 import { db } from '../utils/db'
+import z from 'zod'
 
 const customEmojiRegex = /<a?:\w+:(\d+)>/g
 
@@ -21,6 +22,10 @@ const getEmojiCount = db.prepare(
     ' '
   ) + ';'
 )
+const emojiRowSchema = z.strictObject({
+  emoji_id: z.string(),
+  count: z.number()
+})
 
 export async function getUsage (message: Message): Promise<void> {
   if (!message.guild) {
@@ -31,7 +36,8 @@ export async function getUsage (message: Message): Promise<void> {
     getEmojiCount
       .all(message.guildId)
       .values()
-      .map(({ emoji_id, count }) => [emoji_id as string, count as number])
+      .map(row => emojiRowSchema.parse(row))
+      .map(({ emoji_id, count }) => [emoji_id, count])
   )
   await message.reply({
     embeds: [

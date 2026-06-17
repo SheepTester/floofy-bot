@@ -1,13 +1,15 @@
 import { Message } from 'discord.js'
 import select from '../utils/select'
 import { db } from '../utils/db'
+import z from 'zod'
 
-type LastPing = {
-  author: string
-  content: string
-  message_url: string
-  is_role: 0 | 1
-}
+const lastPingSchema = z.strictObject({
+  author: z.string(),
+  content: z.string(),
+  message_url: z.string(),
+  is_role: z.literal([0, 1])
+})
+type LastPing = z.infer<typeof lastPingSchema>
 
 const addMention = db.prepare(
   [
@@ -52,8 +54,9 @@ export async function whoPinged (
     args.length < 2 && message.content.includes('everyone')
       ? ['everyone', args[0]]
       : args
-  const lastMention = getLastMention.get(channelId, targetId) as
-    LastPing | undefined
+  const lastMention = z
+    .optional(lastPingSchema)
+    .parse(getLastMention.get(channelId, targetId))
   const them =
     targetId === 'everyone'
       ? 'everyone'
@@ -112,16 +115,17 @@ export async function whoPingedMe (
   message: Message,
   [channelId = message.channel.id]: string[]
 ): Promise<void> {
-  const userMention = getLastMention.get(channelId, message.author.id) as
-    LastPing | undefined
+  const userMention = z
+    .optional(lastPingSchema)
+    .parse(getLastMention.get(channelId, message.author.id))
   const possibilities = [
-    getLastMention.get(channelId, 'everyone') as LastPing | undefined,
+    z.optional(lastPingSchema).parse(getLastMention.get(channelId, 'everyone')),
     userMention
   ]
   if (message.member) {
     for (const roleId of message.member.roles.cache.keys()) {
       possibilities.push(
-        getLastMention.get(channelId, roleId) as LastPing | undefined
+        z.optional(lastPingSchema).parse(getLastMention.get(channelId, roleId))
       )
     }
   }
