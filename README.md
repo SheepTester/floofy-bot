@@ -30,7 +30,7 @@ npm run dev
 ## Update `emoji.json`
 
 ```sh
-node scripts/get-emoji.mts > src/utils/emoji.json
+node scripts/get-emoji.ts > src/utils/emoji.json
 ```
 
 ## Install as a service
