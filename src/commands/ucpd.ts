@@ -1,6 +1,11 @@
 // From https://github.com/SheepTester/ucsd-event-scraper/blob/main/explore/police/parse.ts
 
-import { APIEmbed, BaseMessageOptions, Client, Message } from 'discord.js'
+import {
+  type APIEmbed,
+  type BaseMessageOptions,
+  Client,
+  Message
+} from 'discord.js'
 import { getDocument, VerbosityLevel } from 'pdfjs-dist'
 import select from '../utils/select'
 import CachedMap from '../utils/CachedMap'

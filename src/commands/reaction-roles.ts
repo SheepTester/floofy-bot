@@ -1,10 +1,10 @@
 import {
   Message,
   MessageReaction,
-  PartialMessageReaction,
-  PartialUser,
+  type PartialMessageReaction,
+  type PartialUser,
   PermissionFlagsBits,
-  Snowflake,
+  type Snowflake,
   User
 } from 'discord.js'
 import { emojiRegex } from '../utils/emoji-regex'

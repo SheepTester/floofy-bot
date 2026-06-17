@@ -34,6 +34,7 @@
     "@sheeptester/prettier": "^3.9.0",
     "@types/fs-extra": "^9.0.13",
     "esbuild": "^0.23.1",
+    "typescript": "^6.0.3",
     "zod": "^4.1.11"
   },
   "optionalDependencies": {

@@ -2,7 +2,7 @@ import {
   GuildEmoji,
   Message,
   MessageReaction,
-  PartialMessageReaction
+  type PartialMessageReaction
 } from 'discord.js'
 import CachedMap from '../utils/CachedMap'
 

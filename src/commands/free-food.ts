@@ -1,4 +1,4 @@
-import { Part, ThinkingLevel } from '@google/genai'
+import { type Part, ThinkingLevel } from '@google/genai'
 import { ApiError, GoogleGenAI } from '@google/genai'
 import { Client, Message } from 'discord.js'
 import fs from 'fs/promises'

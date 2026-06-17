@@ -1,8 +1,8 @@
 import {
-  APIEmbed,
+  type APIEmbed,
   Client as DiscordClient,
   Message,
-  TextBasedChannel
+  type TextBasedChannel
 } from 'discord.js'
 import { Client, PacketWriter, State } from 'mcproto'
 import select from '../utils/select'

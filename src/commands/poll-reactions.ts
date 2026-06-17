@@ -1,7 +1,7 @@
 import {
   DMChannel,
   Message,
-  PartialMessage,
+  type PartialMessage,
   PermissionFlagsBits
 } from 'discord.js'
 import CachedMap from '../utils/CachedMap'

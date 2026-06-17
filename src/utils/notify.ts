@@ -1,4 +1,4 @@
-import { Client, TextBasedChannel } from 'discord.js'
+import { Client, type TextBasedChannel } from 'discord.js'
 import { isDev } from './isDev'
 
 let channelPromise: Promise<TextBasedChannel> | undefined
