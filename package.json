@@ -3,14 +3,13 @@
   "scripts": {
     "build": "node esbuild.config.ts build",
     "dev:build": "node esbuild.config.ts watch",
-    "dev:start": "node --watch --watch-preserve-output index.js -- --dev",
+    "dev:start": "node --watch --watch-preserve-output --env-file=.env dist/index.js -- --dev",
     "dev": "run-p dev:*",
-    "start": "node index.js"
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@google/genai": "^1.38.0",
     "discord.js": "^14.11.0",
-    "dotenv": "^16.0.1",
     "esbuild": "^0.23.1",
     "fs-extra": "^10.1.0",
     "mcproto": "^0.9.0",
@@ -25,8 +24,5 @@
     "npm-run-all2": "^8.0.4",
     "typescript": "^6.0.3",
     "zod": "^4.1.11"
-  },
-  "optionalDependencies": {
-    "node-windows": "^1.0.0-beta.8"
   }
 }

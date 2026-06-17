@@ -12,7 +12,7 @@ npm install
 npx playwright install firefox
 ```
 
-Edit `.env` per `.env.example`, then do
+Create `.env` based on `.env.example`, then do
 
 ```sh
 npm start
@@ -33,12 +33,36 @@ npm run dev
 node scripts/get-emoji.mts > src/utils/emoji.json
 ```
 
-## Install as a service
+## Deployment
+
+Moofy is hosted on the same web server as [web-server-2], so I'll assume it has been set up first (see "Setup" there).
+
+[web-server-2]: https://github.com/SheepTester/web-server-2
+
+1. ```sh
+   pm2 start ecosystem.config.yml
+   ```
+
+1. ```sh
+   pm2 startup
+   ```
+
+   This outputs a command. Copy paste and run it.
+
+1. ```sh
+   pm2 save
+   ```
+
+### Maintenance
 
 ```sh
-npm install -g node-windows
-npm link node-windows
-node scripts/create-windows-service.js
+# View past logs
+pm2 logs --lines 100
+
+# Real time logs
+pm2 logs
 ```
 
-If Moofy's fallen and it can't get up, open the Windows "Services" app and look for "Floofy Bot." Its farts and noises are logged to Event Viewer.
+If you update `ecosystem.config.yml`, run `pm2 reload ecosystem.config.yml`.
+
+If you update `.env`, you can just run `pm2 reload floofy-bot`.

@@ -1,14 +1,10 @@
 import { Client, GatewayIntentBits, Message, Partials } from 'discord.js'
-import { config } from 'dotenv'
 import fs from 'fs-extra'
 import * as cmd from './commands'
 import parseCommand from './utils/parseCommand'
 import select from './utils/select'
 import { notify } from './utils/notify'
 import { displayError } from './utils/display-error'
-
-// TODO: replace with --env-file=.env
-config()
 
 type Command = (message: Message, args: string[]) => Promise<void>
 

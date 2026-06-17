@@ -44,11 +44,10 @@ async function prepareUpdate (
     }
   }
 
-  await reportExec('git checkout -- package-lock.json')
   await reportExec('git pull')
   await reportExec('npm ci')
   await reportExec('npx playwright install firefox')
-  await reportExec('npm run build')
+  await reportExec('pm2 reload floofy-bot')
 }
 
 export async function exit (message: Message): Promise<void> {
