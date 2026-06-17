@@ -21,9 +21,9 @@ npm start
 ## Develop
 
 ```sh
-# Build to JS for deployment
+# Build to JS for deployment (called automatically by `exeunt` command)
 npm run build
-# Build then run
+# Auto-restart on code change
 npm run dev
 ```
 

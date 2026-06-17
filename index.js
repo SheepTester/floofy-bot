@@ -1,1 +1,1 @@
-import('./src/bundle.mjs')
+import './dist/index.js'

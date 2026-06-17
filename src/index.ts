@@ -7,6 +7,7 @@ import select from './utils/select'
 import { notify } from './utils/notify'
 import { displayError } from './utils/display-error'
 
+// TODO: replace with --env-file=.env
 config()
 
 type Command = (message: Message, args: string[]) => Promise<void>

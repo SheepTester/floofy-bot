@@ -46,7 +46,7 @@ async function prepareUpdate (
 
   await reportExec('git checkout -- package-lock.json')
   await reportExec('git pull')
-  await reportExec('npm install')
+  await reportExec('npm ci')
   await reportExec('npx playwright install firefox')
   await reportExec('npm run build')
 }

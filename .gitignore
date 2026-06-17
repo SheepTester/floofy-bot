@@ -4,8 +4,11 @@ data/
 # Dependency directories
 node_modules/
 
-# dotenv environment variables file
+# Environment variables
 .env
 
-# Output of npm run build
+# Previous output of npm run build
 src/bundle.mjs
+
+# Output of npm run build
+dist/
