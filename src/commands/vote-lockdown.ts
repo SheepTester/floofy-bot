@@ -15,8 +15,7 @@ type Vote = {
 
 const lockdownCategories = new CachedMap<string>('./data/lockdown-cats.json')
 const lockdownVotes = new CachedMap<Vote[]>('./data/lockdown-votes.json')
-export const onReady = () =>
-  Promise.all([lockdownCategories.read(), lockdownVotes.read()])
+await Promise.all([lockdownCategories.read(), lockdownVotes.read()])
 
 export async function setLockdownCategory (
   message: Message,

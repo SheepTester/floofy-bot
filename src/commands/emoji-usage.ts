@@ -9,7 +9,7 @@ import CachedMap from '../utils/CachedMap'
 const customEmojiRegex = /<a?:\w+:(\d+)>/g
 
 const emojiUsage = new CachedMap<number>('./data/emoji-usage.json')
-export const onReady = emojiUsage.read
+await emojiUsage.read()
 
 export async function getUsage (message: Message): Promise<void> {
   if (!message.guild) {

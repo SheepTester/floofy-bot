@@ -1,5 +1,5 @@
 import { Client, GatewayIntentBits, Message, Partials } from 'discord.js'
-import fs from 'fs-extra'
+import fs from 'node:fs/promises'
 import * as cmd from './commands'
 import parseCommand from './utils/parseCommand'
 import select from './utils/select'
@@ -333,29 +333,11 @@ process.on('uncaughtException', reason => {
   process.exit(1)
 })
 
-fs.ensureDir('./data/')
-  .then(() =>
-    Promise.all([
-      cmd.pollReactions.onReady(),
-      cmd.welcome.onReady(),
-      cmd.voteLockdown.onReady(),
-      cmd.mentions.onReady(),
-      cmd.emojiUsage.onReady(),
-      cmd.minecraft.onReady(),
-      cmd.ucpd.onReady(),
-      cmd.wiseGuy.onReady()
-    ])
-  )
-  .then(() => client.login(process.env.TOKEN))
-  .then(() =>
-    Promise.all([
-      cmd.minecraft.init(client),
-      cmd.ucpd.init(client),
-      cmd.freeFood.init(client)
-    ])
-  )
-  .then(() => console.log('Started!'))
-  .catch(err => {
-    console.error(err)
-    process.exit(1)
-  })
+await fs.mkdir('./data/', { recursive: true })
+await client.login(process.env.TOKEN)
+await Promise.all([
+  cmd.minecraft.init(client),
+  cmd.ucpd.init(client),
+  cmd.freeFood.init(client)
+])
+console.log('Started!')

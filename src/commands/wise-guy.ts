@@ -34,7 +34,7 @@ const DEFAULT_STATE: LastWiseGuy = {
 const wiseGuyState = new CachedMap<Readonly<LastWiseGuy>>(
   './data/wise-guy.json'
 )
-export const onReady = wiseGuyState.read
+await wiseGuyState.read()
 
 /**
  * These messages can be used as unsolicited messages "starters" and responses

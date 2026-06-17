@@ -288,7 +288,7 @@ export async function showReport (message: Message, [fileName]: string[]) {
 
 const trackChannels = new CachedMap<1>('./data/ucpd-track.json')
 const seen = new CachedMap<1>('./data/ucpd-seen.json')
-export const onReady = () => Promise.all([trackChannels.read(), seen.read()])
+await Promise.all([trackChannels.read(), seen.read()])
 
 /** 2.13 hours */
 const CHECK_FREQ = 2.13 * 60 * 60 * 1000
