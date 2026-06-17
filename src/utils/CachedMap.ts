@@ -1,4 +1,4 @@
-import fs from 'fs-extra'
+import fs from 'node:fs/promises'
 
 export default class CachedMap<T> {
   #path: string

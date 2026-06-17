@@ -1,6 +1,6 @@
 import { Client, GatewayIntentBits, Message, Partials } from 'discord.js'
 import { config } from 'dotenv'
-import fs from 'fs-extra'
+import fs from 'node:fs/promises'
 import * as cmd from './commands'
 import parseCommand from './utils/parseCommand'
 import select from './utils/select'
@@ -338,7 +338,7 @@ process.on('uncaughtException', reason => {
   process.exit(1)
 })
 
-fs.ensureDir('./data/')
+fs.mkdir('./data/', { recursive: true })
   .then(() =>
     Promise.all([
       cmd.pollReactions.onReady(),
@@ -387,7 +387,7 @@ try {
   }
 } catch (error) {
   try {
-    fs.writeFileSync(
+    await fs.writeFile(
       './data/EventLoggerError.txt',
       `[${printTime()}] ${
         error instanceof Error ? error.stack || error.message : error
@@ -396,4 +396,4 @@ try {
   } catch {}
 }
 
-fs.writeFileSync('./data/last_pid.txt', `[${printTime()}] ${process.pid}`)
+await fs.writeFile('./data/last_pid.txt', `[${printTime()}] ${process.pid}`)
