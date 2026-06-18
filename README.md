@@ -27,7 +27,7 @@ npm run build
 npm run dev
 # Create a migration
 npx dbmate new <migration-name>
-# Apply migrations
+# Apply migrations locally
 DATABASE_URL=db.db npx dbmate up
 ```
 
