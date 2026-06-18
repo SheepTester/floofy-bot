@@ -78,6 +78,9 @@ export async function onMessage (message: Message): Promise<void> {
 export async function onReact (
   reaction: MessageReaction | PartialMessageReaction
 ): Promise<void> {
+  if (!reaction.message.guildId) {
+    return
+  }
   if (reaction.partial) {
     reaction = await reaction.fetch()
   }
