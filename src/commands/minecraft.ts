@@ -38,22 +38,21 @@ const EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 7
 const CHECK_FREQ = 1000 * 60 * 5
 
 // TODO: are the trailing semicolons required
-const getAll = db.prepare('select * from minecraft_track_channels;')
+const getAll = db.prepare('select * from minecraft_track_channels')
 const getInfo = db.prepare(
   [
     'select host, port, start_time from minecraft_track_channels',
     'where channel_id = ?'
-  ].join(' ') + ';'
+  ].join(' ')
 )
 const trackChannel = db.prepare(
   [
     'insert or replace into minecraft_track_channels (channel_id, host, port, start_time)',
     'values (?, ?, ?, ?)'
-  ].join(' ') + ';'
+  ].join(' ')
 )
 const untrackChannel = db.prepare(
-  ['delete from minecraft_track_channels', 'where channel_id = ?'].join(' ') +
-    ';'
+  'delete from minecraft_track_channels where channel_id = ?'
 )
 
 async function getServerStatus (
