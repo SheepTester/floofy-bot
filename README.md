@@ -28,7 +28,7 @@ npm run dev
 # Create a migration
 npx dbmate new <migration-name>
 # Apply migrations locally
-DATABASE_URL=db/db.db npx dbmate up
+npx dbmate --url sqlite:db/db.db up
 ```
 
 ## Update `emoji.json`
