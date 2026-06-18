@@ -5,7 +5,7 @@
     "dev:build": "node esbuild.config.ts watch",
     "dev:start": "node --watch --watch-preserve-output --env-file=.env dist/index.js -- --dev",
     "dev": "run-p dev:*",
-    "start": "node dist/index.js"
+    "start": "node --env-file=.env dist/index.js"
   },
   "dependencies": {
     "@google/genai": "^1.38.0",
