@@ -5,22 +5,8 @@ import {
   PermissionFlagsBits,
   TextChannel
 } from 'discord.js'
-
 import ok from '../utils/ok'
 import select from '../utils/select'
-
-type WelcomeChannel = {
-  channelId: string
-  message: string
-}
-
-const welcomeChannels = new CachedMap<WelcomeChannel>(
-  './data/welcome-channels.json'
-)
-const sentienceMsgSent = new CachedMap<boolean>(
-  './data/sentience-msg-sent.json'
-)
-await Promise.all([welcomeChannels.read(), sentienceMsgSent.read()])
 
 export async function setWelcome (
   message: Message,
@@ -28,14 +14,16 @@ export async function setWelcome (
 ): Promise<void> {
   if (
     message.channel instanceof DMChannel ||
-    message.channel.lastMessageId === undefined
+    message.channel.lastMessageId === undefined ||
+    !message.guild ||
+    !message.member
   ) {
     await message.reply('no dms')
     return
   }
   if (
     !message.channel
-      .permissionsFor(message.member!)
+      .permissionsFor(message.member)
       .has(PermissionFlagsBits.ManageGuild)
   ) {
     await message.reply(
@@ -45,16 +33,20 @@ export async function setWelcome (
   }
 
   welcomeChannels
-    .set(message.guild!.id, { channelId, message: welcomeMsg })
+    .set(message.guild.id, { channelId, message: welcomeMsg })
     .save()
   await message.react(select(ok))
 }
 
 export async function onJoin (member: GuildMember): Promise<void> {
   const { channelId, message } = welcomeChannels.get(member.guild.id) ?? {}
-  if (!channelId) return
+  if (!channelId) {
+    return
+  }
   const channel = member.guild.channels.cache.get(channelId)
-  if (!(channel instanceof TextChannel)) return
+  if (!(channel instanceof TextChannel)) {
+    return
+  }
   await channel.send({
     content: select([
       'Hi, {USER}; please read this:',
@@ -74,7 +66,9 @@ export async function onJoin (member: GuildMember): Promise<void> {
 }
 
 export async function onMessage (message: Message): Promise<void> {
-  if (!message.guild) return
+  if (!message.guild) {
+    return
+  }
   const { channelId } = welcomeChannels.get(message.guild.id) ?? {}
   if (message.channel.id === channelId && !message.author.bot) {
     if (!sentienceMsgSent.get(`${message.guild.id}-${message.author.id}`)) {
