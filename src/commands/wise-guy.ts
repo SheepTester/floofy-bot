@@ -4,6 +4,8 @@
 import { DiscordAPIError, Message, RESTJSONErrorCodes } from 'discord.js'
 import select from '../utils/select'
 import { delay } from '../utils/delay'
+import { db } from '../utils/db'
+import z from 'zod'
 
 const DEFAULT_FREQ = 0.01
 /**
@@ -15,25 +17,61 @@ const STARTER_COOLDOWN = 73 * 60 * 1000
  */
 const CONVERSATIONAL_MODE_DURATION = 25 * 60 * 1000
 
-type LastWiseGuy = {
-  time: number
-  channelId?: string
-  message: string
-  replies: string[]
-  /** Old key */
-  guildFrequency?: unknown
-  guildFrequency2?: number
-}
-const DEFAULT_STATE: LastWiseGuy = {
-  time: 0,
-  message: '',
-  replies: []
-}
-
-const wiseGuyState = new CachedMap<Readonly<LastWiseGuy>>(
-  './data/wise-guy.json'
+const lastWiseGuySchema = z
+  .strictObject({
+    last_time: z.number(),
+    last_channel_id: z.string().nullable(),
+    last_message: z.string(),
+    replies: z.string(),
+    guild_frequency: z.number().nullable()
+  })
+  .default({
+    last_time: 0,
+    last_channel_id: null,
+    last_message: '',
+    replies: '[]',
+    guild_frequency: null
+  })
+const getLastReply = db.prepare(
+  [
+    'select last_time, last_channel_id, last_message, replies, guild_frequency',
+    'from wise_guy'
+  ].join(' ')
 )
-await wiseGuyState.read()
+const registerStarter = db.prepare(
+  [
+    'insert into wise_guy (guild_id, last_time, last_channel_id, last_message, replies)',
+    "values (?, ?, ?, ?, '[]')",
+    'on conflict(guild_id)',
+    'do update set',
+    'last_time = excluded.last_time,',
+    'last_channel_id = excluded.last_channel_id,',
+    'last_message = excluded.last_message,',
+    'replies = excluded.replies'
+  ].join(' ')
+)
+const registerReply = db.prepare(
+  [
+    'update wise_guy',
+    "set replies = json_insert(replies, '$[#]', ?)",
+    'where guild_id = ?'
+  ].join(' ')
+)
+
+const guildFrequencySchema = z.strictObject({
+  guild_frequency: z.number().nullable()
+})
+const getGuildFrequency = db.prepare(
+  'select guild_frequency from wise_guy where guild_id = ?'
+)
+const setGuildFrequency = db.prepare(
+  [
+    'insert into wise_guy (guild_id, guild_frequency)',
+    'values (?, ?)',
+    'on conflict(guild_id)',
+    'do update set guild_frequency = excluded.guild_frequency'
+  ].join(' ')
+)
 
 /**
  * These messages can be used as unsolicited messages "starters" and responses
@@ -193,11 +231,12 @@ export async function onMessage (message: Message): Promise<boolean> {
     // Ignore DMs and bots
     return false
   }
-  const state = wiseGuyState.get(message.guildId, DEFAULT_STATE)
-  const timeSinceLast = Date.now() - state.time
+  const state = lastWiseGuySchema.parse(getLastReply.get(message.guildId))
+  const replies = z.string().array().parse(JSON.parse(state.replies))
+  const timeSinceLast = Date.now() - state.last_time
   let isStarter
   if (timeSinceLast >= STARTER_COOLDOWN) {
-    if (Math.random() < (state.guildFrequency2 ?? DEFAULT_FREQ)) {
+    if (Math.random() < (state.guild_frequency ?? DEFAULT_FREQ)) {
       if (message.author.id === '303745722488979456') {
         // Opt Nick out of starters
         return false
@@ -209,7 +248,7 @@ export async function onMessage (message: Message): Promise<boolean> {
     }
   } else if (
     timeSinceLast <= CONVERSATIONAL_MODE_DURATION &&
-    message.channelId === state.channelId
+    message.channelId === state.last_channel_id
   ) {
     // Conversational mode: only respond to mentions
     if (
@@ -231,25 +270,16 @@ export async function onMessage (message: Message): Promise<boolean> {
     message.member?.displayName.replaceAll('@', ' @ ') ??
       `<@${message.author.id}>`,
     isStarter,
-    [state.message, ...state.replies]
+    [state.last_message, ...replies]
   )
   if (!reply) {
     return false
   }
-  wiseGuyState
-    .set(
-      message.guildId,
-      isStarter
-        ? {
-          time: Date.now(),
-          message: reply,
-          channelId: message.channelId,
-          replies: [],
-          guildFrequency2: state.guildFrequency2
-        }
-        : { ...state, replies: [...state.replies, reply] }
-    )
-    .save()
+  if (isStarter) {
+    registerStarter.run(message.guildId, Date.now(), reply, message.channelId)
+  } else {
+    registerReply.run(message.guildId, reply)
+  }
   message.channel.sendTyping().catch(() => {})
   await delay(Math.floor(Math.random() * 5000) + 500)
   try {
@@ -296,15 +326,14 @@ export async function setFrequency (
     )
     return
   }
-  const state = wiseGuyState.get(message.guildId, DEFAULT_STATE)
-  wiseGuyState
-    .set(message.guildId, {
-      ...state,
-      guildFrequency2: freq
-    })
-    .save()
+  const oldFrequency =
+    z
+      .optional(guildFrequencySchema)
+      .parse(getGuildFrequency.get(message.guildId))?.guild_frequency ??
+    DEFAULT_FREQ
+  setGuildFrequency.run(message.guildId, freq)
   await message.reply(
-    freq >= (state.guildFrequency2 ?? DEFAULT_FREQ)
+    freq >= oldFrequency
       ? select([
         'ill GLADLY be louder fs fs',
         'im a BIG enjoyer of freedom of speech',
