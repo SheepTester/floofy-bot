@@ -4,18 +4,41 @@ import {
   MessageReaction,
   type PartialMessageReaction
 } from 'discord.js'
-import CachedMap from '../utils/CachedMap'
+import { db } from '../utils/db'
+import z from 'zod'
 
 const customEmojiRegex = /<a?:\w+:(\d+)>/g
 
-const emojiUsage = new CachedMap<number>('./data/emoji-usage.json')
-await emojiUsage.read()
+const countEmoji = db.prepare(
+  [
+    'insert into emoji_usage (guild_id, emoji_id, count)',
+    'values (?, ?, 1)',
+    'on conflict (guild_id, emoji_id)',
+    'do update set count = emoji_usage.count + 1'
+  ].join(' ') + ';'
+)
+const getEmojiCount = db.prepare(
+  ['select emoji_id, count', 'from emoji_usage', 'where guild_id = ?'].join(
+    ' '
+  ) + ';'
+)
+const emojiRowSchema = z.strictObject({
+  emoji_id: z.string(),
+  count: z.number()
+})
 
 export async function getUsage (message: Message): Promise<void> {
   if (!message.guild) {
     await message.reply('i dont track emojis in dms sry')
     return
   }
+  const counts = new Map(
+    getEmojiCount
+      .all(message.guildId)
+      .values()
+      .map(row => emojiRowSchema.parse(row))
+      .map(({ emoji_id, count }) => [emoji_id, count])
+  )
   await message.reply({
     embeds: [
       {
@@ -24,7 +47,7 @@ export async function getUsage (message: Message): Promise<void> {
           await message.guild.emojis.fetch(undefined, { force: true }),
           ([emojiId, { animated }]) => ({
             emoji: `<${animated ? 'a' : ''}:w:${emojiId}>`,
-            count: emojiUsage.get(`${message.guildId}-${emojiId}`, 0)
+            count: counts.get(emojiId) ?? 0
           })
         )
           .sort((a, b) => b.count - a.count)
@@ -46,11 +69,10 @@ export async function onMessage (message: Message): Promise<void> {
       ([, emojiId]) => emojiId
     )
   )
+
   for (const emojiId of emojis) {
-    const id = `${message.guildId}-${emojiId}`
-    emojiUsage.set(id, emojiUsage.get(id, 0) + 1)
+    countEmoji.run(message.guildId, emojiId)
   }
-  emojiUsage.save()
 }
 
 export async function onReact (
@@ -68,8 +90,6 @@ export async function onReact (
       reaction.emoji.guild.id !== reaction.message.guildId
     )
   ) {
-    const id = `${reaction.message.guildId}-${reaction.emoji.id}`
-    emojiUsage.set(id, emojiUsage.get(id, 0) + 1)
+    countEmoji.run(reaction.message.guildId, reaction.emoji.id)
   }
-  emojiUsage.save()
 }

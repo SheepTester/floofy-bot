@@ -2,7 +2,6 @@
 // https://sheeptester.github.io/hello-world/wiseguy.html
 
 import { DiscordAPIError, Message, RESTJSONErrorCodes } from 'discord.js'
-import CachedMap from '../utils/CachedMap'
 import select from '../utils/select'
 import { delay } from '../utils/delay'
 

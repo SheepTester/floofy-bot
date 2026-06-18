@@ -4,7 +4,6 @@ import {
   Message,
   PermissionFlagsBits
 } from 'discord.js'
-import CachedMap from '../utils/CachedMap'
 import ok from '../utils/ok'
 import select from '../utils/select'
 
