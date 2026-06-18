@@ -61,7 +61,7 @@ export async function exit (message: Message): Promise<void> {
 
     console.log('Restarting')
     await prepareUpdate(msg, results)
-    results.push('Done...?')
+    results.push('Done...? (this should not happen)')
     await msg.edit(displayResults(results))
   } else {
     await message.reply(
