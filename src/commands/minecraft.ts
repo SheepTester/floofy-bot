@@ -264,6 +264,7 @@ export async function track (message: Message, [address]: string[]) {
     await check(message.channel, info, state, true)
   } else {
     const { changes } = untrackChannel.run(message.channel.id)
+    delete states[message.channel.id]
     await message.reply(
       changes > 0
         ? 'ok i will stop tracking'

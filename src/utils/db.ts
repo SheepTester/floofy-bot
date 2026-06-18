@@ -1,3 +1,3 @@
 import { DatabaseSync } from 'node:sqlite'
 
-export const db = new DatabaseSync('db.db')
+export const db = new DatabaseSync(process.env.DATABASE_URL ?? ':memory:')
