@@ -7,12 +7,23 @@ import {
 import { emojiRegex } from '../utils/emoji-regex'
 import ok from '../utils/ok'
 import select from '../utils/select'
+import { db } from '../utils/db'
 
-const pollChannels = new CachedMap<boolean>('./data/poll-reactions.json')
-await pollChannels.read()
+const getPollChannel = db.prepare(
+  'select 1 from poll_reactions_channels where channel_id = ?'
+)
+const addPollChannel = db.prepare(
+  [
+    'insert or ignore into poll_reactions_channels (channel_id)',
+    'values (?)'
+  ].join(' ')
+)
+const removePollChannel = db.prepare(
+  'delete from poll_reactions_channels where channel_id = ?'
+)
 
 function isPollChannel (message: PartialMessage | Message): boolean {
-  return pollChannels.get(message.channel.id, false)
+  return !!getPollChannel.get(message.channel.id)
 }
 function isPoll (message: Message): boolean {
   return (
@@ -50,7 +61,7 @@ export async function pollChannel (
       ])
     )
   } else {
-    pollChannels.set(message.channel.id, true).save()
+    addPollChannel.run(message.channel.id)
     await message.react(select(ok))
   }
 }
@@ -74,7 +85,7 @@ export async function notPollChannel (message: Message): Promise<void> {
     return
   }
   if (isPollChannel(message)) {
-    pollChannels.set(message.channel.id, false).save()
+    removePollChannel.run(message.channel.id)
     await message.react(select(ok))
   } else {
     await message.reply(

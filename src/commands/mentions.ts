@@ -9,19 +9,18 @@ const lastPingSchema = z.strictObject({
   message_url: z.string(),
   is_role: z.literal([0, 1])
 })
-type LastPing = z.infer<typeof lastPingSchema>
 
 const addMention = db.prepare(
   [
     'insert or replace into mentions (channel_id, mentioned, author, content, message_url, is_role)',
     'values (?, ?, ?, ?, ?, ?)'
-  ].join(' ') + ';'
+  ].join(' ')
 )
 const getLastMention = db.prepare(
   [
     'select author, content, message_url, is_role from mentions',
     'where channel_id = ? and mentioned = ?'
-  ].join(' ') + ';'
+  ].join(' ')
 )
 
 export async function onMessage (message: Message): Promise<void> {

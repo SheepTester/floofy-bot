@@ -15,12 +15,10 @@ const countEmoji = db.prepare(
     'values (?, ?, 1)',
     'on conflict (guild_id, emoji_id)',
     'do update set count = emoji_usage.count + 1'
-  ].join(' ') + ';'
+  ].join(' ')
 )
 const getEmojiCount = db.prepare(
-  ['select emoji_id, count', 'from emoji_usage', 'where guild_id = ?'].join(
-    ' '
-  ) + ';'
+  'select emoji_id, count from emoji_usage where guild_id = ?'
 )
 const emojiRowSchema = z.strictObject({
   emoji_id: z.string(),
