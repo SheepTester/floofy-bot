@@ -6,7 +6,7 @@ create table wise_guy (
   last_message text not null default '',
   -- JSON array because I'm lazy
   replies text not null default '[]',
-  guild_frequency integer,
+  guild_frequency real,
   primary key (guild_id)
 );
 
