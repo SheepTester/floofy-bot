@@ -35,7 +35,8 @@ const lastWiseGuySchema = z
 const getLastReply = db.prepare(
   [
     'select last_time, last_channel_id, last_message, replies, guild_frequency',
-    'from wise_guy'
+    'from wise_guy',
+    'where guild_id = ?'
   ].join(' ')
 )
 const registerStarter = db.prepare(
@@ -276,9 +277,9 @@ export async function onMessage (message: Message): Promise<boolean> {
     return false
   }
   if (isStarter) {
-    registerStarter.run(message.guildId, Date.now(), reply, message.channelId)
+    registerStarter.run(message.guildId, Date.now(), message.channelId, reply)
   } else {
-    registerReply.run(message.guildId, reply)
+    registerReply.run(reply, message.guildId)
   }
   message.channel.sendTyping().catch(() => {})
   await delay(Math.floor(Math.random() * 5000) + 500)

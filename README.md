@@ -20,6 +20,8 @@ npm start
 
 ## Develop
 
+You will need sqlite3 installed (`sudo apt install sqlite3`) for `dbmate up` to generate db/schema.sql.
+
 ```sh
 # Build to JS for deployment (called automatically by `exeunt` command)
 npm run build
@@ -28,7 +30,7 @@ npm run dev
 # Create a migration
 npx dbmate new <migration-name>
 # Apply migrations locally
-DATABASE_URL=db.db npx dbmate up
+npx dbmate --url sqlite:db/db.db up
 ```
 
 ## Update `emoji.json`
