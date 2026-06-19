@@ -7,6 +7,34 @@ import {
 } from 'discord.js'
 import ok from '../utils/ok'
 import select from '../utils/select'
+import { db } from '../utils/db'
+import z from 'zod'
+
+const setWelcomeMessage = db.prepare(
+  [
+    'insert or replace into welcome_channels (guild_id, channel_id, message_content)',
+    'values (?, ?, ?)'
+  ].join(' ')
+)
+const welcomeMessageSchema = z
+  .strictObject({
+    channel_id: z.string(),
+    message_content: z.string()
+  })
+  .optional()
+const getWelcomeMessage = db.prepare(
+  [
+    'select channel_id, message_content',
+    'from welcome_channels',
+    'where guild_id = ?'
+  ].join(' ')
+)
+const markUserSeen = db.prepare(
+  [
+    'insert or ignore into welcome_message_sent (guild_id, user_id)',
+    'values (?, ?)'
+  ].join(' ')
+)
 
 export async function setWelcome (
   message: Message,
@@ -32,18 +60,17 @@ export async function setWelcome (
     return
   }
 
-  welcomeChannels
-    .set(message.guild.id, { channelId, message: welcomeMsg })
-    .save()
+  setWelcomeMessage.run(message.guild.id, channelId, welcomeMsg)
   await message.react(select(ok))
 }
 
 export async function onJoin (member: GuildMember): Promise<void> {
-  const { channelId, message } = welcomeChannels.get(member.guild.id) ?? {}
-  if (!channelId) {
+  const { channel_id, message_content } =
+    welcomeMessageSchema.parse(getWelcomeMessage.get(member.guild.id)) ?? {}
+  if (!channel_id) {
     return
   }
-  const channel = member.guild.channels.cache.get(channelId)
+  const channel = member.guild.channels.cache.get(channel_id)
   if (!(channel instanceof TextChannel)) {
     return
   }
@@ -56,7 +83,7 @@ export async function onJoin (member: GuildMember): Promise<void> {
     ]).replace('{USER}', member.toString()),
     embeds: [
       {
-        description: message,
+        description: message_content,
         footer: {
           text: 'Note: I am just a bot, and I have been instructed to repeat this message to all users who join the server.'
         }
@@ -69,9 +96,11 @@ export async function onMessage (message: Message): Promise<void> {
   if (!message.guild) {
     return
   }
-  const { channelId } = welcomeChannels.get(message.guild.id) ?? {}
+  const channelId = welcomeMessageSchema.parse(
+    getWelcomeMessage.get(message.guild.id)
+  )?.channel_id
   if (message.channel.id === channelId && !message.author.bot) {
-    if (!sentienceMsgSent.get(`${message.guild.id}-${message.author.id}`)) {
+    if (markUserSeen.run(message.guild.id, message.author.id).changes > 0) {
       await message.reply({
         content:
           message.content.length > 15
@@ -85,13 +114,8 @@ export async function onMessage (message: Message): Promise<void> {
               "Say more. Couldn't a bot have said that as well? Once you're prove you're human you'll eventually be verified.",
               'The more you write, the better. Show me your definitely human imagination! If your messages are satisfactorily humanlike, you will eventually get verified.'
             ]),
-        allowedMentions: {
-          repliedUser: false
-        }
+        allowedMentions: { repliedUser: false }
       })
-      sentienceMsgSent
-        .set(`${message.guild.id}-${message.author.id}`, true)
-        .save()
     }
   }
 }
