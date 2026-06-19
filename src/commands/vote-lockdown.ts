@@ -31,7 +31,7 @@ const deleteExpiredVotes = db.prepare(
 )
 const tryVote = db.prepare(
   [
-    'insert into vote_lockdown_votes (guild_id, user_id, vote_time)',
+    'insert or ignore into vote_lockdown_votes (guild_id, user_id, vote_time)',
     'values (?, ?, ?)'
   ].join(' ')
 )
@@ -40,7 +40,7 @@ const countVotes = db.prepare(
   [
     'select count(*) as vote_count',
     'from vote_lockdown_votes',
-    'where guild_id = ? and vote_time < ?'
+    'where guild_id = ? and vote_time >= ?'
   ].join(' ')
 )
 
