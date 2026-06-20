@@ -1,6 +1,12 @@
 # Bot data
 data/
 
+# Sqlite3 database
+db/db.db
+db/db.db-wal
+db/db.db-shm
+db/db.db-journal
+
 # Dependency directories
 node_modules/
 
