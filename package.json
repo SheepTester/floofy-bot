@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@sheeptester/prettier": "^3.9.0",
-    "@types/fs-extra": "^9.0.13",
+    "@types/node": "^26.0.0",
     "npm-run-all2": "^8.0.4",
     "typescript": "^6.0.3",
     "zod": "^4.1.11"
