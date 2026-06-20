@@ -4,10 +4,16 @@
  * the sqlite database specified in `DATABASE_URL`.
  *
  * Usage: node --env-file=.env scripts/migrate-to-sqlite.ts
+ *
+ * TODO: remove `allowImportingTsExtensions` from tsconfig.json after this file
+ * is deleted.
  */
 
-import CachedMap from '../src/utils/CachedMap'
-import { db } from '../src/utils/db'
+import { execSync } from 'node:child_process'
+import CachedMap from '../src/utils/CachedMap.ts'
+import { db } from '../src/utils/db.ts'
+
+console.log(execSync('npx dbmate up', { encoding: 'utf-8' }))
 
 function prepare (tableName: string, columnNames: string): string {
   const columns = columnNames.split(' ')
