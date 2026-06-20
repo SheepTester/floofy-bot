@@ -32,7 +32,7 @@ export async function getUsage (message: Message): Promise<void> {
   }
   const counts = new Map(
     getEmojiCount
-      .all(message.guildId)
+      .all(message.guild.id)
       .values()
       .map(row => emojiRowSchema.parse(row))
       .map(({ emoji_id, count }) => [emoji_id, count])
@@ -57,7 +57,7 @@ export async function getUsage (message: Message): Promise<void> {
 }
 
 export async function onMessage (message: Message): Promise<void> {
-  if (!message.guildId) {
+  if (!message.guild) {
     return
   }
   // Remove duplicate emoji
@@ -69,14 +69,15 @@ export async function onMessage (message: Message): Promise<void> {
   )
 
   for (const emojiId of emojis) {
-    countEmoji.run(message.guildId, emojiId)
+    countEmoji.run(message.guild.id, emojiId)
   }
 }
 
 export async function onReact (
   reaction: MessageReaction | PartialMessageReaction
 ): Promise<void> {
-  if (!reaction.message.guildId) {
+  const { guild } = reaction.message
+  if (!guild) {
     return
   }
   if (reaction.partial) {
@@ -88,9 +89,10 @@ export async function onReact (
     reaction.count === 1 &&
     !(
       reaction.emoji instanceof GuildEmoji &&
-      reaction.emoji.guild.id !== reaction.message.guildId
-    )
+      reaction.emoji.guild.id !== guild.id
+    ) &&
+    reaction.emoji.id !== null
   ) {
-    countEmoji.run(reaction.message.guildId, reaction.emoji.id)
+    countEmoji.run(guild.id, reaction.emoji.id)
   }
 }
