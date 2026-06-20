@@ -32,8 +32,7 @@ export async function getUsage (message: Message): Promise<void> {
   }
   const counts = new Map(
     getEmojiCount
-      .all(message.guild.id)
-      .values()
+      .iterate(message.guild.id)
       .map(row => emojiRowSchema.parse(row))
       .map(({ emoji_id, count }) => [emoji_id, count])
   )

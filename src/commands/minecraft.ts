@@ -221,8 +221,7 @@ const states: Record<string, TrackState> = {}
 export async function init (client: DiscordClient): Promise<void> {
   await Promise.all(
     getAll
-      .all()
-      .values()
+      .iterate()
       .map(row =>
         trackInfoSchema.safeExtend({ channel_id: z.string() }).parse(row)
       )
