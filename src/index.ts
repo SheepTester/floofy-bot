@@ -339,6 +339,7 @@ const printTime = () =>
     timeZone: 'America/Los_Angeles'
   })
 
+await fs.mkdir('./data/', { recursive: true })
 try {
   const { EventLogger } = require('node-windows')
   const log = new EventLogger('Floofy noises')
@@ -364,10 +365,8 @@ try {
     )
   } catch {}
 }
-
 await fs.writeFile('./data/last_pid.txt', `[${printTime()}] ${process.pid}`)
 
-await fs.mkdir('./data/', { recursive: true })
 await client.login(process.env.TOKEN)
 await Promise.all([
   cmd.minecraft.init(client),
