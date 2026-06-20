@@ -1,5 +1,8 @@
-# Bot data (old)
-data/
+data/EventLoggerError.txt
+data/last_pid.txt
+
+# free-food scraper screenshots
+data/*.png
 
 # Sqlite3 database
 db/db.db
