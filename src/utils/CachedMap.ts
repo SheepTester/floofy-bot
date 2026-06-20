@@ -1,0 +1,55 @@
+import fs from 'node:fs/promises'
+
+export default class CachedMap<T> {
+  #path: string
+  #object!: Record<string, T>
+
+  constructor (path: string) {
+    this.#path = path
+  }
+
+  read = async (): Promise<void> => {
+    this.#object = await fs
+      .readFile(this.#path, 'utf-8')
+      .then(json => (json === '' ? {} : JSON.parse(json)))
+      .catch(err => (err.code === 'ENOENT' ? {} : Promise.reject(err)))
+  }
+
+  has (id: string): boolean {
+    return Object.prototype.hasOwnProperty.call(this.#object, id)
+  }
+
+  get (id: string | undefined): T | undefined
+  get (id: string | undefined, defaultValue: T): T
+  get (id: string | undefined, defaultValue?: T): T | undefined {
+    if (id === undefined) {
+      return defaultValue
+    }
+    return this.has(id) ? this.#object[id] : defaultValue
+  }
+
+  set (id: string, value: T): this {
+    this.#object[id] = value
+    return this
+  }
+
+  delete (id: string): this {
+    delete this.#object[id]
+    return this
+  }
+
+  entries (): [string, T][] {
+    return Object.entries(this.#object)
+  }
+
+  async save (): Promise<void> {
+    // If two `save`s are running at the same time, then at the very least
+    // `writeFile` will be writing to separate files, so whatever ends up
+    // getting renamed to `this.#path` will be a complete, valid JSON file
+    const tmpPath = `${this.#path}-${Date.now()}-${String(Math.random()).slice(
+      2
+    )}.tmp`
+    await fs.writeFile(tmpPath, JSON.stringify(this.#object, null, '\t') + '\n')
+    await fs.rename(tmpPath, this.#path)
+  }
+}
