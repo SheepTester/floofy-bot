@@ -37,7 +37,6 @@ const DEFAULT_PORT = '25565'
 const EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 7
 const CHECK_FREQ = 1000 * 60 * 5
 
-// TODO: are the trailing semicolons required
 const getAll = db.prepare('select * from minecraft_track_channels')
 const getInfo = db.prepare(
   [
