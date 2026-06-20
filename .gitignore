@@ -1,5 +1,14 @@
-# Bot data
-data/
+# Bot data (old)
+data/*.json
+
+data/EventLoggerError.txt
+data/last_pid.txt
+
+# free-food scraper screenshtos
+data/*.png
+
+# Dump from scripts/export.ts
+data/export/
 
 # Sqlite3 database
 db/db.db
