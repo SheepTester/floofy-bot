@@ -22,7 +22,7 @@ type Results = (string | undefined)[]
 
 function displayResults (results: Results): string {
   return results
-    .map(result => (result ? '```shell\n' + result + '\n```' : ''))
+    .map(result => (result ? '```shell\n' + result.slice(-1000) + '\n```' : ''))
     .join('')
 }
 
