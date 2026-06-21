@@ -333,7 +333,6 @@ process.on('uncaughtException', reason => {
   process.exit(1)
 })
 
-await fs.mkdir('./data/', { recursive: true })
 await client.login(process.env.TOKEN)
 await Promise.all([
   cmd.minecraft.init(client),
