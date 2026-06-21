@@ -1,6 +1,3 @@
-data/EventLoggerError.txt
-data/last_pid.txt
-
 # free-food scraper screenshots
 data/*.png
 data/free-food-debug-auth.json

@@ -76,29 +76,7 @@ export async function exit (message: Message): Promise<void> {
 
     console.log('Restarting')
     await prepareUpdate(msg, results)
-    results.push('Exiting...')
-    await msg.edit(displayResults(results))
-    process.exit()
-  } else {
-    await message.reply(
-      select([
-        'shoo',
-        `you are not <@${process.env.OWNER}>`,
-        'out of here commoner',
-        'scram plebian'
-      ])
-    )
-  }
-}
-
-export async function softUpdate (message: Message): Promise<void> {
-  if (message.author.id === process.env.OWNER) {
-    const msg = await message.reply(select(['mmk', 'okie dokie', 'aight']))
-    const results: Results = []
-
-    console.log('Soft updating')
-    await prepareUpdate(msg, results)
-    results.push('Done')
+    results.push('Done...? (this should not happen)')
     await msg.edit(displayResults(results))
   } else {
     await message.reply(
