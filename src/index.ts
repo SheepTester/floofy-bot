@@ -1,14 +1,10 @@
 import { Client, GatewayIntentBits, Message, Partials } from 'discord.js'
-import { config } from 'dotenv'
 import fs from 'node:fs/promises'
 import * as cmd from './commands'
 import parseCommand from './utils/parseCommand'
 import select from './utils/select'
 import { notify } from './utils/notify'
 import { displayError } from './utils/display-error'
-
-// TODO: replace with --env-file=.env
-config()
 
 type Command = (message: Message, args: string[]) => Promise<void>
 
@@ -343,6 +339,7 @@ const printTime = () =>
     timeZone: 'America/Los_Angeles'
   })
 
+await fs.mkdir('./data/', { recursive: true })
 try {
   const { EventLogger } = require('node-windows')
   const log = new EventLogger('Floofy noises')
@@ -368,10 +365,8 @@ try {
     )
   } catch {}
 }
-
 await fs.writeFile('./data/last_pid.txt', `[${printTime()}] ${process.pid}`)
 
-await fs.mkdir('./data/', { recursive: true })
 await client.login(process.env.TOKEN)
 await Promise.all([
   cmd.minecraft.init(client),
