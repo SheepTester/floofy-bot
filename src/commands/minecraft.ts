@@ -37,7 +37,6 @@ const DEFAULT_PORT = '25565'
 const EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 7
 const CHECK_FREQ = 1000 * 60 * 5
 
-// TODO: are the trailing semicolons required
 const getAll = db.prepare('select * from minecraft_track_channels')
 const getInfo = db.prepare(
   [
@@ -221,8 +220,7 @@ const states: Record<string, TrackState> = {}
 export async function init (client: DiscordClient): Promise<void> {
   await Promise.all(
     getAll
-      .all()
-      .values()
+      .iterate()
       .map(row =>
         trackInfoSchema.safeExtend({ channel_id: z.string() }).parse(row)
       )

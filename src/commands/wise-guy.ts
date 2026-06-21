@@ -228,11 +228,11 @@ function generateMessage (
  * @returns whether the bot sent a message
  */
 export async function onMessage (message: Message): Promise<boolean> {
-  if (!message.guildId || message.author.bot) {
+  if (!message.guild || message.author.bot) {
     // Ignore DMs and bots
     return false
   }
-  const state = lastWiseGuySchema.parse(getLastReply.get(message.guildId))
+  const state = lastWiseGuySchema.parse(getLastReply.get(message.guild.id))
   const replies = z.string().array().parse(JSON.parse(state.replies))
   const timeSinceLast = Date.now() - state.last_time
   let isStarter
@@ -277,9 +277,9 @@ export async function onMessage (message: Message): Promise<boolean> {
     return false
   }
   if (isStarter) {
-    registerStarter.run(message.guildId, Date.now(), message.channelId, reply)
+    registerStarter.run(message.guild.id, Date.now(), message.channelId, reply)
   } else {
-    registerReply.run(reply, message.guildId)
+    registerReply.run(reply, message.guild.id)
   }
   message.channel.sendTyping().catch(() => {})
   await delay(Math.floor(Math.random() * 5000) + 500)
@@ -306,7 +306,7 @@ export async function setFrequency (
   message: Message,
   [freqStr]: string[]
 ): Promise<void> {
-  if (!message.guildId) {
+  if (!message.guild) {
     await message.reply(
       select([
         '..in our DMs?? 😳',
@@ -330,9 +330,9 @@ export async function setFrequency (
   const oldFrequency =
     z
       .optional(guildFrequencySchema)
-      .parse(getGuildFrequency.get(message.guildId))?.guild_frequency ??
+      .parse(getGuildFrequency.get(message.guild.id))?.guild_frequency ??
     DEFAULT_FREQ
-  setGuildFrequency.run(message.guildId, freq)
+  setGuildFrequency.run(message.guild.id, freq)
   await message.reply(
     freq >= oldFrequency
       ? select([

@@ -1,5 +1,5 @@
 import { exec } from 'child_process'
-import { Message } from 'discord.js'
+import { Message, type MessageEditOptions } from 'discord.js'
 import select from '../utils/select'
 import { displayBytes } from '../utils/displayBytes'
 
@@ -20,10 +20,18 @@ function execute (command: string): Promise<ExecutionResult> {
 
 type Results = (string | undefined)[]
 
-function displayResults (results: Results): string {
-  return results
-    .map(result => (result ? '```shell\n' + result + '\n```' : ''))
-    .join('')
+function displayResults (results: Results): MessageEditOptions {
+  return {
+    embeds: [
+      {
+        description: results
+          .map(result =>
+            result ? '```shell\n' + result.slice(-1000) + '\n```' : ''
+          )
+          .join('')
+      }
+    ]
+  }
 }
 
 async function prepareUpdate (
@@ -44,12 +52,19 @@ async function prepareUpdate (
     }
   }
 
+  // Also TEMP until npm ci can be used
+  await reportExec('git checkout -- package-lock.json')
+
   await reportExec('git pull')
-  await reportExec('npm ci')
+
+  // TEMP: npm ci doesn't work, at least on windows, because sharp's .dll is in
+  // use. for some reason npm install still works
+  // await reportExec('npm ci')
+  await reportExec('npm install')
+
   await reportExec('npx playwright install firefox')
   await reportExec('npm run build')
-  await reportExec('npx dbmate up')
-  await reportExec('pm2 reload floofy-bot')
+  await reportExec('npx dbmate --no-dump-schema up')
 }
 
 export async function exit (message: Message): Promise<void> {
