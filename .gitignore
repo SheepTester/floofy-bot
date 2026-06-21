@@ -1,6 +1,3 @@
-# Bot data (old)
-data/*.json
-
 data/EventLoggerError.txt
 data/last_pid.txt
 
