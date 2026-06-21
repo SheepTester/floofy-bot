@@ -90,7 +90,7 @@ export async function voteLockdown (message: Message): Promise<void> {
 
   const now = Date.now()
   deleteExpiredVotes.run(message.guild.id, now - VOTE_PERIOD)
-  if (tryVote.run(message.guild.id, message.author.id, now).changes === 0) {
+  if (!tryVote.run(message.guild.id, message.author.id, now).changes) {
     await message.reply("tsk tsk, you've already voted in the past 10 min")
     return
   }

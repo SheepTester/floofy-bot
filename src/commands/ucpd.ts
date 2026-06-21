@@ -386,7 +386,7 @@ export function init (client: Client): void {
 }
 
 export async function track (message: Message): Promise<void> {
-  if (trackChannel.run(message.channel.id).changes === 0) {
+  if (!trackChannel.run(message.channel.id).changes) {
     await message.reply(
       select([
         'oh i thought you all were already criminals',

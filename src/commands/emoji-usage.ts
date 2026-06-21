@@ -66,7 +66,6 @@ export async function onMessage (message: Message): Promise<void> {
       ([, emojiId]) => emojiId
     )
   )
-
   for (const emojiId of emojis) {
     countEmoji.run(message.guild.id, emojiId)
   }

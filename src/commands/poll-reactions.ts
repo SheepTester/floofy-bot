@@ -43,8 +43,9 @@ export async function pollChannel (
     return
   }
   if (
+    !message.member ||
     !message.channel
-      .permissionsFor(message.member!)
+      .permissionsFor(message.member)
       .has(PermissionFlagsBits.ManageChannels)
   ) {
     await message.reply(
@@ -75,8 +76,9 @@ export async function notPollChannel (message: Message): Promise<void> {
     return
   }
   if (
+    !message.member ||
     !message.channel
-      .permissionsFor(message.member!)
+      .permissionsFor(message.member)
       .has(PermissionFlagsBits.ManageChannels)
   ) {
     await message.reply(

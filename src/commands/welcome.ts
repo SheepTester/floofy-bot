@@ -70,7 +70,7 @@ export async function onJoin (member: GuildMember): Promise<void> {
   if (!channel_id) {
     return
   }
-  const channel = member.guild.channels.cache.get(channel_id)
+  const channel = await member.guild.channels.fetch(channel_id)
   if (!(channel instanceof TextChannel)) {
     return
   }

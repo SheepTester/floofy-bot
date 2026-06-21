@@ -1,6 +1,7 @@
 export * as avatar from './avatar'
 export * as emojiUsage from './emoji-usage'
 export * as freeFood from './free-food'
+export * as leave from './leave'
 export * as mentions from './mentions'
 export * as minecraft from './minecraft'
 export * as pollReactions from './poll-reactions'
