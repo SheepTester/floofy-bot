@@ -1,5 +1,5 @@
 import { exec } from 'child_process'
-import { Message } from 'discord.js'
+import { Message, type MessageEditOptions } from 'discord.js'
 import select from '../utils/select'
 import { displayBytes } from '../utils/displayBytes'
 
@@ -20,10 +20,18 @@ function execute (command: string): Promise<ExecutionResult> {
 
 type Results = (string | undefined)[]
 
-function displayResults (results: Results): string {
-  return results
-    .map(result => (result ? '```shell\n' + result.slice(-1000) + '\n```' : ''))
-    .join('')
+function displayResults (results: Results): MessageEditOptions {
+  return {
+    embeds: [
+      {
+        description: results
+          .map(result =>
+            result ? '```shell\n' + result.slice(-1000) + '\n```' : ''
+          )
+          .join('')
+      }
+    ]
+  }
 }
 
 async function prepareUpdate (
