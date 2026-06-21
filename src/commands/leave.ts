@@ -112,17 +112,41 @@ export async function onLeave (
   const generateContent = (
     includeMessageLinkIfExists: boolean
   ): MessageCreateOptions => {
-    let messageUrl = ''
+    const content = select([
+      'bye USER',
+      'farewell USER',
+      'hasta la vista USER',
+      'sayonara USER',
+      'USER is no longer with us',
+      'USER is no longer among us',
+      'USER left.',
+      'USER left the server',
+      'USER se fue',
+      'bye USER you will not be missed',
+      'bye USER you will be missed dearly'
+    ]).replace('USER', `**${member.user.tag}**`)
+    let message = ''
     if (includeMessageLinkIfExists) {
       // Include mention (which includes user ID)
-      messageUrl += ` ${member}`
+      message += `\n\nUser ID: ${member}`
       if (lastMessage) {
-        messageUrl += ` https://discord.com/channels/${member.guild.id}/${lastMessage.channel_id}/${lastMessage.message_id}`
+        message += ` https://discord.com/channels/${member.guild.id}/${lastMessage.channel_id}/${lastMessage.message_id}`
       }
     }
     // TODO: Include display name, nickname (if present/different), and roles
     return {
-      embeds: [{ description: `bye **${member.user.tag}**${messageUrl}` }]
+      content,
+      embeds: [
+        {
+          description: message,
+          author: {
+            // TODO: show display name (i think my discord.js is out of date and
+            // doesnt have it yet)
+            name: member.user.tag,
+            icon_url: member.user.displayAvatarURL()
+          }
+        }
+      ]
     }
   }
   if (lastMessage?.channel_id === leaveChannel.id) {
