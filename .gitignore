@@ -4,8 +4,9 @@ data/*.json
 data/EventLoggerError.txt
 data/last_pid.txt
 
-# free-food scraper screenshtos
+# free-food scraper screenshots
 data/*.png
+data/free-food-debug-auth.json
 
 # Dump from scripts/export.ts
 data/export/
