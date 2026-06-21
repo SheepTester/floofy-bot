@@ -22,8 +22,5 @@ node_modules/
 # Environment variables
 .env
 
-# Previous output of npm run build
-src/bundle.mjs
-
 # Output of npm run build
 dist/
