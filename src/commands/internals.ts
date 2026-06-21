@@ -53,7 +53,10 @@ async function prepareUpdate (
   }
 
   await reportExec('git pull')
-  await reportExec('npm ci')
+  // TEMP: npm ci doesn't work, at least on windows, because sharp's .dll is in
+  // use. for some reason npm install still works
+  // await reportExec('npm ci')
+  await reportExec('npm install')
   await reportExec('npx playwright install firefox')
   await reportExec('npm run build')
 }
