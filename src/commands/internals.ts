@@ -64,7 +64,7 @@ async function prepareUpdate (
 
   await reportExec('npx playwright install firefox')
   await reportExec('npm run build')
-  await reportExec('npx dbmate up --no-dump-schema')
+  await reportExec('npx dbmate --no-dump-schema up')
 }
 
 export async function exit (message: Message): Promise<void> {
