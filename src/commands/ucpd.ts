@@ -8,7 +8,8 @@ import {
 } from 'discord.js'
 import { getDocument, VerbosityLevel } from 'pdfjs-dist'
 import select from '../utils/select'
-import CachedMap from '../utils/CachedMap'
+import { db } from '../utils/db'
+import z from 'zod'
 
 type TextObject = {
   content: string
@@ -286,27 +287,52 @@ export async function showReport (message: Message, [fileName]: string[]) {
   }
 }
 
-const trackChannels = new CachedMap<1>('./data/ucpd-track.json')
-const seen = new CachedMap<1>('./data/ucpd-seen.json')
-await Promise.all([trackChannels.read(), seen.read()])
+const getChannels = db.prepare('select channel_id from ucpd_track_channels')
+const channelSchema = z.strictObject({ channel_id: z.string() })
+const trackChannel = db.prepare(
+  'insert or ignore into ucpd_track_channels (channel_id) values (?)'
+)
+const untrackChannel = db.prepare(
+  'delete from ucpd_track_channels where channel_id = ?'
+)
+const getSeen = db.prepare(
+  [
+    'select file_name from ucpd_seen',
+    'where file_name in (select value from json_each(?))'
+  ].join(' ')
+)
+const fileNameSchema = z.strictObject({ file_name: z.string() })
+const markSeen = db.prepare(
+  'insert or ignore into ucpd_seen (file_name) values (?)'
+)
 
 /** 2.13 hours */
 const CHECK_FREQ = 2.13 * 60 * 60 * 1000
 
 export function init (client: Client): void {
   setInterval(async () => {
-    const channels = trackChannels.entries()
+    const channels = z.array(channelSchema).parse(getChannels.all())
     if (channels.length === 0) {
       return
     }
-    const unseen = (await getFileNames()).filter(
-      fileName => !seen.get(fileName)
+    const fileNames = await getFileNames()
+    const seen = new Set(
+      z
+        .array(fileNameSchema)
+        .parse(getSeen.all(JSON.stringify(fileNames)))
+        .values()
+        .map(({ file_name }) => file_name)
     )
     // Show oldest report first; display other reports if any later on
-    const fileName = unseen.at(-1)
+    const unseen = fileNames
+      .toReversed()
+      .values()
+      .filter(fileName => !seen.has(fileName))
+    const fileName = unseen.next().value
     if (!fileName) {
       return
     }
+    const remaining = unseen.toArray()
     const descriptions = group(display(await getReports(fileName)))
     const embeds = descriptions.map((description, i): APIEmbed => ({
       title:
@@ -323,19 +349,18 @@ export function init (client: Client): void {
           }
           : undefined
     }))
-    seen.set(fileName, 1)
-    await seen.save()
-    for (const [channelId] of channels) {
-      const channel = await client.channels.fetch(channelId)
+    markSeen.run(fileName)
+    for (const { channel_id } of channels) {
+      const channel = await client.channels.fetch(channel_id)
       if (!channel?.isTextBased()) {
         continue
       }
       for (const [i, embed] of embeds.entries()) {
         const embeds = [embed]
-        if (unseen.length > 1 && i === descriptions.length - 1) {
+        if (remaining.length > 0 && i === descriptions.length - 1) {
           embeds.push({
             title: 'Multiple crime logs just dropped',
-            description: `Reply \`florida man:\` followed by the date:\n${unseen.join(
+            description: `Reply \`florida man:\` followed by the date:\n${remaining.join(
               '\n'
             )}`
           })
@@ -361,7 +386,7 @@ export function init (client: Client): void {
 }
 
 export async function track (message: Message): Promise<void> {
-  if (trackChannels.has(message.channel.id)) {
+  if (trackChannel.run(message.channel.id).changes === 0) {
     await message.reply(
       select([
         'oh i thought you all were already criminals',
@@ -370,7 +395,6 @@ export async function track (message: Message): Promise<void> {
       ])
     )
   } else {
-    await trackChannels.set(message.channel.id, 1).save()
     await message.reply(
       select([
         'ok when crime happens i will tell you',
@@ -382,8 +406,7 @@ export async function track (message: Message): Promise<void> {
 }
 
 export async function untrack (message: Message): Promise<void> {
-  if (trackChannels.has(message.channel.id)) {
-    await trackChannels.delete(message.channel.id).save()
+  if (untrackChannel.run(message.channel.id).changes > 0) {
     await message.reply(
       select([
         'i guess you got tired of seeing those crime logs',
