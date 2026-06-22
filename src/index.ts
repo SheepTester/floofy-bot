@@ -206,14 +206,18 @@ async function handleMessage (message: Message): Promise<void> {
       message.content === cmd.ignore.ignoreState.endPhrase
     ) {
       cmd.ignore.ignoreState.endPhrase = null
-      await message.channel.send(
-        select([
-          "i'm BACK folkk",
-          'i am BACK',
-          'i have RETURNED',
-          'IGNORANCE is now CRINGE again'
-        ])
-      )
+      if (message.channel.isSendable()) {
+        await message.channel.send(
+          select([
+            "i'm BACK folkk",
+            'i am BACK',
+            'i have RETURNED',
+            'IGNORANCE is now CRINGE again'
+          ])
+        )
+      } else {
+        await message.react('🙊')
+      }
     }
     return
   }

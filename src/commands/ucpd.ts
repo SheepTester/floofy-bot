@@ -258,7 +258,7 @@ export async function showReport (message: Message, [fileName]: string[]) {
           }
         ]
       }
-      if (i === 0) {
+      if (i === 0 || !message.channel.isSendable()) {
         await message.reply(msg)
       } else {
         await message.channel.send(msg)
@@ -352,7 +352,7 @@ export function init (client: Client): void {
     markSeen.run(fileName)
     for (const { channel_id } of channels) {
       const channel = await client.channels.fetch(channel_id)
-      if (!channel?.isTextBased()) {
+      if (!channel?.isSendable()) {
         continue
       }
       for (const [i, embed] of embeds.entries()) {

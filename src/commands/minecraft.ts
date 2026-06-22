@@ -2,7 +2,7 @@ import {
   type APIEmbed,
   Client as DiscordClient,
   Message,
-  type TextBasedChannel
+  type SendableChannels
 } from 'discord.js'
 import { Client, PacketWriter, State } from 'mcproto'
 import select from '../utils/select'
@@ -159,7 +159,7 @@ function createEmbed (
 }
 
 async function check (
-  channel: TextBasedChannel,
+  channel: SendableChannels,
   info: TrackInfo,
   state: TrackState,
   start = false
@@ -226,7 +226,7 @@ export async function init (client: DiscordClient): Promise<void> {
       )
       .map(async ({ channel_id, ...info }) => {
         const channel = await client.channels.fetch(channel_id)
-        if (channel?.isTextBased()) {
+        if (channel?.isSendable()) {
           states[channel_id] = {
             lastPlayers: [],
             timeoutId: setInterval(() => {
@@ -244,11 +244,16 @@ export async function track (message: Message, [address]: string[]) {
     clearInterval(states[message.channel.id].timeoutId)
   }
   if (address) {
+    const channel = message.channel
+    if (!channel.isSendable()) {
+      await message.react('🙊')
+      return
+    }
     const [host, port = DEFAULT_PORT] = address.split(':')
     const state: TrackState = {
       lastPlayers: [],
       timeoutId: setInterval(() => {
-        check(message.channel, info, state)
+        check(channel, info, state)
       }, CHECK_FREQ)
     }
     const info: TrackInfo = {
@@ -256,9 +261,9 @@ export async function track (message: Message, [address]: string[]) {
       port: +port,
       start_time: Date.now()
     }
-    trackChannel.run(message.channel.id, info.host, info.port, info.start_time)
-    states[message.channel.id] = state
-    await check(message.channel, info, state, true)
+    trackChannel.run(channel.id, info.host, info.port, info.start_time)
+    states[channel.id] = state
+    await check(channel, info, state, true)
   } else {
     const { changes } = untrackChannel.run(message.channel.id)
     delete states[message.channel.id]

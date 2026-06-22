@@ -970,7 +970,7 @@ export class FreeFoodScraper {
             let parent = menuBtn.closest('[style*="transform: translate"]')
             if (!parent) {
               let output = ''
-              let e: SVGElement | HTMLElement = menuBtn
+              let e = menuBtn
               while (e.parentElement) {
                 output += `${e.outerHTML.split('>')[0]}\n`
                 e = e.parentElement
@@ -986,7 +986,7 @@ export class FreeFoodScraper {
             }
             const usernames = Array.from(
               parent.querySelectorAll('[role="link"]'),
-              link => link.textContent.replace(/Verified$/, '')
+              (link: any) => link.textContent.replace(/Verified$/, '')
             )
             return { success: true, usernames }
           })

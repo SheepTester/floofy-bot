@@ -228,7 +228,7 @@ function generateMessage (
  * @returns whether the bot sent a message
  */
 export async function onMessage (message: Message): Promise<boolean> {
-  if (!message.guild || message.author.bot) {
+  if (!message.guild || message.author.bot || message.channel.isDMBased()) {
     // Ignore DMs and bots
     return false
   }

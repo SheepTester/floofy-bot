@@ -103,7 +103,7 @@ export async function onLeave (
     return
   }
   const leaveChannel = await member.guild.channels.fetch(leaveChannelId)
-  if (!leaveChannel?.isTextBased()) {
+  if (!leaveChannel?.isSendable()) {
     return
   }
   const lastMessage = getLastMessageSchema

@@ -1,5 +1,4 @@
 import {
-  DMChannel,
   GuildMember,
   Message,
   PermissionFlagsBits,
@@ -41,7 +40,7 @@ export async function setWelcome (
   [channelId, welcomeMsg]: string[]
 ): Promise<void> {
   if (
-    message.channel instanceof DMChannel ||
+    message.channel.isDMBased() ||
     message.channel.lastMessageId === undefined ||
     !message.guild ||
     !message.member
