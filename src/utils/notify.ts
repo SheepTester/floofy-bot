@@ -1,14 +1,14 @@
-import { Client, type TextBasedChannel } from 'discord.js'
+import { Client, type SendableChannels } from 'discord.js'
 import { isDev } from './isDev'
 
-let channelPromise: Promise<TextBasedChannel> | undefined
+let channelPromise: Promise<SendableChannels> | undefined
 
 async function getChannel (
   client: Client,
   channelId: string
-): Promise<TextBasedChannel> {
+): Promise<SendableChannels> {
   const channel = await client.channels.fetch(channelId)
-  if (channel?.isTextBased()) {
+  if (channel?.isSendable()) {
     return channel
   } else {
     throw new Error(`channel ${channelId} does not exist D:`)

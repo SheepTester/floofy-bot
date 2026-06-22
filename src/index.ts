@@ -65,6 +65,8 @@ const ownerCommands: Record<string, Command> = {
   'debug scraper': cmd.freeFood.debugScraper
 }
 const commands: Record<string, Command> = {
+  // Utilities
+
   'source of <id>': cmd.source.getSource,
   'get raw message source of message <id> in this channel':
     cmd.source.getSource,
@@ -109,7 +111,11 @@ const commands: Record<string, Command> = {
   'my pfp': cmd.avatar.avatar,
   'whats my pfp': cmd.avatar.avatar,
 
+  // Fun
+
   '!warm <id>': cmd.avatar.warm,
+
+  'emoji usage': cmd.emojiUsage.getUsage,
 
   'status:': cmd.minecraft.serverStatus,
   'who is on the minecraft server:': cmd.minecraft.serverStatus,
@@ -124,6 +130,8 @@ const commands: Record<string, Command> = {
   'show latest ucpd report': cmd.ucpd.showReport,
   'show ucpd reports for:': cmd.ucpd.showReport,
 
+  // Probably should require perms
+
   'teach me crime': cmd.ucpd.track,
   'enable ucpd reports in this channel': cmd.ucpd.track,
 
@@ -133,6 +141,8 @@ const commands: Record<string, Command> = {
   'set chance to:': cmd.wiseGuy.setFrequency,
   'change probability of unsolicited moofy reply to this number between 0 and 1:':
     cmd.wiseGuy.setFrequency,
+
+  // Requires perms
 
   'this is a poll channel': cmd.pollReactions.pollChannel,
   'turn on poll channel mode which auto-adds reactions to messages':
@@ -148,7 +158,10 @@ const commands: Record<string, Command> = {
   'not a poll channel': cmd.pollReactions.notPollChannel,
   "this isn't a poll channel": cmd.pollReactions.notPollChannel,
 
-  'emoji usage': cmd.emojiUsage.getUsage,
+  'announce departures in <id>': cmd.leave.setChannel,
+  'send leave messages to <id>': cmd.leave.setChannel,
+  'stop exposing our dying server': cmd.leave.setChannel,
+  'disable leave messages': cmd.leave.setChannel,
 
   'welcome new folk in <id> with:': cmd.welcome.setWelcome,
   'when a user joins the server send a message in channel <id> containing the following:':
@@ -161,6 +174,8 @@ const commands: Record<string, Command> = {
   "deny the unverified access to the commoners' channels":
     cmd.voteLockdown.voteLockdown,
   'vote for lockdown': cmd.voteLockdown.voteLockdown,
+
+  // Meta
 
   about: cmd.about.about,
   'who are you': cmd.about.about,
@@ -191,14 +206,18 @@ async function handleMessage (message: Message): Promise<void> {
       message.content === cmd.ignore.ignoreState.endPhrase
     ) {
       cmd.ignore.ignoreState.endPhrase = null
-      await message.channel.send(
-        select([
-          "i'm BACK folkk",
-          'i am BACK',
-          'i have RETURNED',
-          'IGNORANCE is now CRINGE again'
-        ])
-      )
+      if (message.channel.isSendable()) {
+        await message.channel.send(
+          select([
+            "i'm BACK folkk",
+            'i am BACK',
+            'i have RETURNED',
+            'IGNORANCE is now CRINGE again'
+          ])
+        )
+      } else {
+        await message.react('🙊')
+      }
     }
     return
   }
@@ -259,6 +278,7 @@ async function handleMessage (message: Message): Promise<void> {
     cmd.welcome.onMessage(message),
     cmd.mentions.onMessage(message),
     cmd.emojiUsage.onMessage(message),
+    cmd.leave.onMessage(message),
     !ranCommand &&
       cmd.wiseGuy.onMessage(message).then(async sentMessage => {
         if (!sentMessage && botReply) {
@@ -299,6 +319,13 @@ client.on('guildMemberAdd', async member => {
     return
   }
   await cmd.welcome.onJoin(member)
+})
+
+client.on('guildMemberRemove', async member => {
+  if (cmd.ignore.ignoreState.endPhrase !== null) {
+    return
+  }
+  await cmd.leave.onLeave(member)
 })
 
 client.on('messageReactionAdd', async (reaction, user) => {

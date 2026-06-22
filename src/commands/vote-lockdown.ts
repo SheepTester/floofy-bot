@@ -1,9 +1,4 @@
-import {
-  CategoryChannel,
-  DMChannel,
-  Message,
-  PermissionFlagsBits
-} from 'discord.js'
+import { CategoryChannel, Message, PermissionFlagsBits } from 'discord.js'
 import ok from '../utils/ok'
 import select from '../utils/select'
 import { db } from '../utils/db'
@@ -49,7 +44,7 @@ export async function setLockdownCategory (
   [categoryId]: string[]
 ): Promise<void> {
   if (
-    message.channel instanceof DMChannel ||
+    message.channel.isDMBased() ||
     message.channel.lastMessageId === undefined ||
     !message.guild ||
     !message.member
@@ -75,7 +70,7 @@ const MIN_VOTES = 3
 const VOTE_PERIOD = 10 * 60 * 1000
 
 export async function voteLockdown (message: Message): Promise<void> {
-  if (!message.guild) {
+  if (!message.guild || message.channel.isDMBased()) {
     await message.reply('no dms!!!!')
     return
   }
@@ -90,7 +85,7 @@ export async function voteLockdown (message: Message): Promise<void> {
 
   const now = Date.now()
   deleteExpiredVotes.run(message.guild.id, now - VOTE_PERIOD)
-  if (tryVote.run(message.guild.id, message.author.id, now).changes === 0) {
+  if (!tryVote.run(message.guild.id, message.author.id, now).changes) {
     await message.reply("tsk tsk, you've already voted in the past 10 min")
     return
   }

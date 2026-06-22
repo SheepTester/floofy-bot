@@ -8,7 +8,7 @@
 
 import { createWriteStream } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
-import { DatabaseSync, type SQLOutputValue } from 'node:sqlite'
+import { DatabaseSync } from 'node:sqlite'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import z from 'zod'
@@ -54,8 +54,6 @@ for (const { name: table } of db
   .map(row => nameSchema.parse(row))) {
   await pipeline(
     Readable.from(allRows(table)),
-    // @ts-expect-error Might be related to DOM type conflicts, and a package is
-    // ///-referencing dom types, so I can't get rid of them
     createWriteStream(`./data/export/${table}.json`)
   )
 }

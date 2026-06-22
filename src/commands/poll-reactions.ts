@@ -1,9 +1,4 @@
-import {
-  DMChannel,
-  Message,
-  type PartialMessage,
-  PermissionFlagsBits
-} from 'discord.js'
+import { Message, type PartialMessage, PermissionFlagsBits } from 'discord.js'
 import { emojiRegex } from '../utils/emoji-regex'
 import ok from '../utils/ok'
 import select from '../utils/select'
@@ -36,15 +31,16 @@ export async function pollChannel (
   message: PartialMessage | Message
 ): Promise<void> {
   if (
-    message.channel instanceof DMChannel ||
+    message.channel.isDMBased() ||
     message.channel.lastMessageId === undefined
   ) {
     await message.reply("who're you polling in here just me and you??")
     return
   }
   if (
+    !message.member ||
     !message.channel
-      .permissionsFor(message.member!)
+      .permissionsFor(message.member)
       .has(PermissionFlagsBits.ManageChannels)
   ) {
     await message.reply(
@@ -68,15 +64,16 @@ export async function pollChannel (
 
 export async function notPollChannel (message: Message): Promise<void> {
   if (
-    message.channel instanceof DMChannel ||
+    message.channel.isDMBased() ||
     message.channel.lastMessageId === undefined
   ) {
     await message.reply("who're you polling in here just me and you??")
     return
   }
   if (
+    !message.member ||
     !message.channel
-      .permissionsFor(message.member!)
+      .permissionsFor(message.member)
       .has(PermissionFlagsBits.ManageChannels)
   ) {
     await message.reply(
