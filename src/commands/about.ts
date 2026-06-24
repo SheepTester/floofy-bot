@@ -25,6 +25,7 @@ export async function about (message: Message): Promise<void> {
           ]),
           select([
             '[observe my brain](https://github.com/SheepTester/floofy-bot)',
+            'inspect my [gut microbiome](https://github.com/SheepTester/floofy-bot)',
             'i am on the [git hubs](https://github.com/SheepTester/floofy-bot)',
             'my six brain cells are made in [java script](https://github.com/SheepTester/floofy-bot)'
           ]),
