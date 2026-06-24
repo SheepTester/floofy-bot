@@ -49,10 +49,11 @@ export async function whoPinged (
   message: Message,
   args: string[]
 ): Promise<void> {
-  const [targetId, channelId = message.channel.id] =
+  const [targetId, channelIdMaybe = null] =
     args.length < 2 && message.content.includes('everyone')
       ? ['everyone', args[0]]
       : args
+  const channelId = channelIdMaybe ?? message.channel.id
   const lastMention = z
     .optional(lastPingSchema)
     .parse(getLastMention.get(channelId, targetId))
@@ -76,10 +77,14 @@ export async function whoPinged (
             lastMention.message_url
           })):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`,
           footer: {
-            text:
+            text: tips([
+              !channelIdMaybe
+                ? 'this is their last ping in *this* channel, add `in <channel>` to check a different one'
+                : '',
               !lastMention.is_role && targetId !== 'everyone'
                 ? "this only shows direct pings to the user, btw, it doesn't factor in role and everyone pings"
                 : ''
+            ])
           }
         }
       ],
@@ -96,11 +101,8 @@ export async function whoPinged (
           'i dont recall $them being pinged $here, maybe i was offline or smth'
         ])
           .replace('$them', them)
-          .replace(
-            '$here',
-            channelId === message.channel.id ? 'here' : 'there'
-          ) +
-        (channelId === message.channel.id
+          .replace('$here', channelIdMaybe ? 'there' : 'here') +
+        (!channelIdMaybe
           ? ` (note: if the ping was in a different channel then reply \`who pinged ${targetId} in <channel>\`)`
           : ''),
       allowedMentions: {
@@ -112,8 +114,9 @@ export async function whoPinged (
 
 export async function whoPingedMe (
   message: Message,
-  [channelId = message.channel.id]: string[]
+  [channelIdMaybe]: string[]
 ): Promise<void> {
+  const channelId = channelIdMaybe ?? message.channel.id
   const userMention = z
     .optional(lastPingSchema)
     .parse(getLastMention.get(channelId, message.author.id))
@@ -149,10 +152,14 @@ export async function whoPingedMe (
             lastMention.message_url
           }):\n\n${lastMention.content.replace(/]\(/g, ']\ufeff(')}`,
           footer: {
-            text:
-              lastMention === userMention
-                ? ''
-                : `tip: reply \`who pinged ${message.author.id} in ${channelId}\` to filter out role and everyone pings`
+            text: tips([
+              !channelIdMaybe
+                ? 'this is your last ping in *this* channel, reply `who pinged me in <channel>` to check a different one'
+                : '',
+              lastMention !== userMention
+                ? `to filter out role and everyone pings, reply \`who pinged ${message.author.id} in ${channelId}\``
+                : ''
+            ])
           }
         }
       ],
@@ -168,7 +175,7 @@ export async function whoPingedMe (
           "hm you might've been pinged while i was offline",
           "your ping is not in my records, maybe i wasn't tracking pings then"
         ]) +
-        (channelId === message.channel.id
+        (!channelIdMaybe
           ? ' (note: if you were pinged in a different channel then reply `who pinged me in <channel>`)'
           : ''),
       allowedMentions: {
@@ -176,4 +183,15 @@ export async function whoPingedMe (
       }
     })
   }
+}
+
+function tips (tips: string[]): string {
+  const filtered = tips.filter(tip => tip)
+  if (filtered.length === 0) {
+    return ''
+  }
+  if (filtered.length === 1) {
+    return `tip: ${filtered[0]}`
+  }
+  return `tips: ${filtered.map((tip, i) => `(${i + 1}) ${tip}`).join(', ')}`
 }
