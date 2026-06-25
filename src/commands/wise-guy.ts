@@ -126,7 +126,14 @@ const genericResponses = [
   'sybau',
   'holy shit',
   'perhaps',
-  '🥀'
+  '🥀',
+  'i take back what i said',
+  'what does that mean',
+  'i dont get it',
+  'i bet netanyahu is behind this',
+  'dont worry everything will be alright',
+  'i need to know what netanyahu thinks of this',
+  'in times like this, i like to turn to the words of benjamin netanyahu for advice'
 ]
 
 /** e.g. to "there's this guy at this cafe ..." */
