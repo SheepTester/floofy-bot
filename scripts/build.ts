@@ -21,7 +21,7 @@ switch (mode) {
     break
   }
   default: {
-    console.error('usage: node esbuild.config.ts (build|watch)')
+    console.error('usage: node scripts/build.ts (build|watch)')
     process.exit(1)
   }
 }

@@ -1,8 +1,8 @@
 {
   "type": "module",
   "scripts": {
-    "build": "node esbuild.config.ts build",
-    "dev:build": "node esbuild.config.ts watch",
+    "build": "node scripts/build.ts build",
+    "dev:build": "node scripts/build.ts watch",
     "dev:start": "node --watch --watch-preserve-output index.js -- --dev",
     "dev": "run-p dev:*",
     "start": "node index.js"
