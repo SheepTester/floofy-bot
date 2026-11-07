@@ -9,6 +9,7 @@ import sharp from 'sharp'
 import { displayError } from '../utils/display-error'
 import { notify } from '../utils/notify'
 import { isDev } from '../utils/isDev'
+import { delay } from '../utils/delay'
 
 let collectionPromise: Promise<Collection<ScrapedEvent>> | undefined
 
@@ -340,45 +341,64 @@ const fmt = new Intl.DateTimeFormat('en-US', {
 
 const POST_PAGES = isDev ? 2 : 10
 
-let geminiCalls = 0
-let starting = 0
 let geminiReady = Promise.resolve()
 
+// Rate limits: https://aistudio.google.com/rate-limit
+// Model IDs: https://aistudio.google.com/docs/models
+// Gemma model IDs: https://gemma.ai/deployment/gemini-api/
 type GeminiModel =
+  | 'gemini-3.8-flash'
+  | 'gemini-3.5-flash-lite'
+  | 'gemini-3.6-flash'
   | 'gemini-3-flash-preview'
   | 'gemini-3.1-flash-lite'
   | 'gemini-3.5-flash'
-  | 'gemini-2.0-flash'
-  | 'gemini-2.0-flash-lite'
+  // | 'gemini-2.0-flash'
+  // | 'gemini-2.0-flash-lite'
+  // will be removed Dec 1
   | 'gemini-2.5-flash'
+  // deprecated but won't be removed yet
   | 'gemini-2.5-flash-lite'
   | 'gemma-4-31b-it'
-const modelPriority: GeminiModel[] = [
-  'gemini-3.5-flash',
-  'gemini-3-flash-preview',
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'gemma-4-31b-it'
-  // 'gemini-2.0-flash',
-  // 'gemini-2.0-flash-lite'
+  | 'gemma-4-26b-a4b-it'
+type GeminiModelEntry = {
+  modelId: GeminiModel
+  rpd: number
+  rpm: number
+}
+const modelPriority: GeminiModelEntry[] = [
+  { modelId: 'gemini-3.8-flash', rpd: 20, rpm: 5 },
+  { modelId: 'gemini-3.5-flash-lite', rpd: 500, rpm: 15 },
+  { modelId: 'gemini-3.6-flash', rpd: 20, rpm: 5 },
+  { modelId: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15 },
+  { modelId: 'gemini-3-flash-preview', rpd: 20, rpm: 5 },
+  { modelId: 'gemini-2.5-flash-lite', rpd: 20, rpm: 10 },
+  { modelId: 'gemma-4-31b-it', rpd: 14.4e3, rpm: 30 },
+  { modelId: 'gemma-4-26b-a4b-it', rpd: 14.4e3, rpm: 30 }
 ]
 
-type ModelApiKeyPair = {
+type ModelApiKeyPair = GeminiModelEntry & {
   ai: GoogleGenAI
-  model: GeminiModel
-  name: string
+  displayName: string
 }
 let modelPairsCache: ModelApiKeyPair[] | undefined
 function getModelPairs (): ModelApiKeyPair[] {
   if (!modelPairsCache) {
     const apiKeys = Object.entries(process.env)
-      .filter(([k]) => k.startsWith('GEMINI_API_KEY'))
-      .map(([, v]) => v)
-      .filter(apiKey => apiKey !== undefined)
-      .map(apiKey => new GoogleGenAI({ apiKey }))
+      .values()
+      .map(([envKey, apiKey]) =>
+        envKey.startsWith('GEMINI_API_KEY') && apiKey !== undefined
+          ? { ai: new GoogleGenAI({ apiKey }), envKey }
+          : null
+      )
+      .filter(entry => entry !== null)
+      .toArray()
     modelPairsCache = modelPriority.flatMap(model =>
-      apiKeys.map((ai, i) => ({ model, ai, name: `${model}[${i}]` }))
+      apiKeys.map(({ ai, envKey }): ModelApiKeyPair => ({
+        ...model,
+        ai,
+        displayName: `${model.modelId}[${envKey}]`
+      }))
     )
   }
   return modelPairsCache
@@ -391,7 +411,14 @@ export class FreeFoodScraper {
   #expectedUsernameOrder: string[] = []
   #expectedUsernames = new Set<string>()
   #seenUsernames = new Set<string>()
-  #model: ModelApiKeyPair = getModelPairs()[0]
+  #availableModels: (ModelApiKeyPair & {
+    availableTime: number
+    temporarilyUnavailableTries: number
+  })[] = getModelPairs().map(entry => ({
+    ...entry,
+    availableTime: 0,
+    temporarilyUnavailableTries: 0
+  }))
   geminiIncomplete = false
 
   logs = ''
@@ -443,8 +470,7 @@ export class FreeFoodScraper {
   async #readImages (
     images: ArrayBuffer[],
     timestamp: Date,
-    caption?: string,
-    retries = 0
+    caption?: string
   ): Promise<GeminiResult[]> {
     // ensure gemini calls are performed in series
     const { promise, resolve } = Promise.withResolvers<void>()
@@ -452,28 +478,37 @@ export class FreeFoodScraper {
     geminiReady = geminiReady.then(() => promise)
     await oldPromise
 
-    if (geminiCalls >= 15) {
-      // max 15 RPM on free plan
-      const ready = starting + 60 * 1000
-      const delay = Math.max(ready - Date.now(), 0)
-      this.#log(
-        `[gemini] taking a ${delay / 1000 + 5} sec break to cool off on gemini`
+    const waitStart = Date.now()
+    let printedDelay = false
+    let availableModel
+    while (true) {
+      if (this.#availableModels.length === 0) {
+        throw new TypeError('[gemini] no more models available')
+      }
+      availableModel = this.#availableModels.find(
+        entry => Date.now() >= entry.availableTime
       )
-      await new Promise(resolve => setTimeout(resolve, delay))
-      // 5 seconds just in case
-      await new Promise(resolve => setTimeout(resolve, 5000))
-      geminiCalls = 0
+      if (availableModel) {
+        break
+      }
+      await delay(1000)
+      if (!printedDelay && Date.now() - waitStart > 10_000) {
+        this.#log('[gemini] waiting...')
+        printedDelay = true
+      }
     }
-    if (geminiCalls === 0) {
-      starting = Date.now()
+    const waitTime = Date.now() - waitStart
+    if (waitTime > 10_000) {
+      this.#log(`[gemini] waited for ${waitTime}ms`)
     }
-    geminiCalls++
 
+    const startTime = Date.now()
     let result
     try {
       // TODO: turn down the temperature maybe
-      result = await this.#model.ai.models.generateContent({
-        model: this.#model.model,
+      this.#log(`[gemini] start ${availableModel.displayName}`)
+      result = await availableModel.ai.models.generateContent({
+        model: availableModel.modelId,
         contents: [
           ...images.map((buffer): Part => ({
             inlineData: {
@@ -491,13 +526,14 @@ export class FreeFoodScraper {
         ],
         config: {
           responseMimeType: 'application/json',
-          responseJsonSchema,
-          thinkingConfig: {
-            thinkingLevel:
-              this.#model.model === 'gemini-3-flash-preview'
-                ? ThinkingLevel.MINIMAL
-                : undefined
-          }
+          responseJsonSchema
+          // What is this for
+          // thinkingConfig: {
+          //   thinkingLevel:
+          //     this.#model.model === 'gemini-3-flash-preview'
+          //       ? ThinkingLevel.MINIMAL
+          //       : undefined
+          // }
         }
       })
       const value = JSON.parse(
@@ -510,6 +546,8 @@ export class FreeFoodScraper {
         console.error(result)
         throw new TypeError(`[gemini] not an array: ${result.text}`)
       }
+      availableModel.temporarilyUnavailableTries = 0
+      availableModel.availableTime = Date.now() + 1000 / availableModel.rpm
       return value
     } catch (error) {
       // ServerError: got status: 503 Service Unavailable. {"error":{"code":503,"message":"The model is overloaded. Please try again later.","status":"UNAVAILABLE"}}
@@ -518,61 +556,68 @@ export class FreeFoodScraper {
       // ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15\nPlease retry in 55.369243237s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"15"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"55s"}]}}
       // ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 200\nPlease retry in 55.515718001s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"200"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"55s"}]}}
       // ApiError: {"error":{"code":503,"message":"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","status":"UNAVAILABLE"}}
+      // ApiError: {"error":{"code":400,"message":"Unable to process input image. Please retry or report in https://developers.generativeai.google/guide/troubleshooting","status":"INVALID_ARGUMENT"}}
       if (
         error instanceof ApiError &&
-        (error.status === 503 || error.status === 500 || error.status === 429)
+        (error.status === 503 ||
+          error.status === 500 ||
+          error.status === 429 ||
+          error.status === 400)
       ) {
-        this.#log(`[gemini] apierror caught (${this.#model.name}):`, error)
-        if (retries < 5) {
-          let timeout = 60 * (retries + 1) + 5
+        this.#log(
+          `[gemini] apierror caught (${availableModel.displayName}):`,
+          error
+        )
+        if (
+          error.status === 429 &&
+          error.message.includes('GenerateRequestsPerDayPerProjectPerModel')
+        ) {
+          this.#log(
+            `[gemini] removing ${availableModel.displayName} since we hit day ratelimit`
+          )
+          this.#availableModels = this.#availableModels.filter(
+            entry => entry !== availableModel
+          )
+        } else if (availableModel.temporarilyUnavailableTries < 3) {
+          let timeout = 30 * 2 ** availableModel.temporarilyUnavailableTries + 5
           if (error.status === 429) {
             const match = error.message.match(/"retryDelay":"(\d+)s"/)
             if (match) {
               timeout = +match[1] + 5
             }
-            if (
-              error.message.includes(
-                'GenerateRequestsPerDayPerProjectPerModel'
-              ) ||
-              error.message.includes('The model is overloaded.') ||
-              error.message.includes(
-                'This model is currently experiencing high demand.'
-              )
-            ) {
-              const pairs = getModelPairs()
-              const nextModel =
-                pairs[(pairs.indexOf(this.#model) + 1) % pairs.length]
-              this.#log(
-                `[gemini] ${this.#model.name} ${
-                  error.message.includes(
-                    'GenerateRequestsPerDayPerProjectPerModel'
-                  )
-                    ? 'ratelimit reached'
-                    : 'overloaded'
-                }, switching to ${nextModel.name}`
-              )
-              this.#model = nextModel
-            }
           }
+          availableModel.temporarilyUnavailableTries++
+          availableModel.availableTime = Date.now() + timeout
           this.#log(
-            `[gemini] cooling off for ${timeout} secs then retrying. retries = ${retries}`
+            `[gemini] cooling off ${availableModel.displayName} for ${timeout} secs then retrying. model retries = ${availableModel.temporarilyUnavailableTries}`
           )
-          await new Promise(resolve => setTimeout(resolve, timeout * 1000))
-          resolve()
-          return this.#readImages(images, timestamp, caption, retries + 1)
         } else {
-          throw new Error('too many api errors')
+          this.#availableModels = this.#availableModels.filter(
+            entry => entry !== availableModel
+          )
+          this.#log(
+            `[gemini] removing ${availableModel.displayName} because it hit max retries`
+          )
         }
       } else if (error instanceof SyntaxError) {
-        this.#log(`JSON parse error (${error.message}): ${result?.text}`)
-        resolve()
-        return this.#readImages(images, timestamp, caption, retries + 1)
+        this.#log(
+          `JSON parse error (${error.message}) for ${availableModel.displayName}: ${result?.text}`
+        )
+        availableModel.temporarilyUnavailableTries++
+        availableModel.availableTime = Date.now() + 1000 / availableModel.rpm
       } else {
         throw error
       }
     } finally {
       resolve()
+      const responseTime = Date.now() - startTime
+      if (responseTime > 10_000) {
+        this.#log(
+          `[gemini] ${availableModel.displayName} took ${responseTime}ms, consider making it think less`
+        )
+      }
     }
+    return this.#readImages(images, timestamp, caption)
   }
 
   async #handleGraphQlResponse (response: GraphQlResponse): Promise<void> {
@@ -1317,9 +1362,12 @@ export class FreeFoodScraper {
       )
       if (!shouldContinue) {
         failRest = true
-        note += `Giving up after ${i} of ${insertReqs.length}. Model: ${
-          this.#model.name
-        }\n`
+        note += `Giving up after ${i} of ${insertReqs.length}. Models remaining: ${this.#availableModels
+          .slice(0, 2)
+          .map(({ displayName }) => displayName)
+          .join(
+            ', '
+          )}${this.#availableModels.length > 2 ? `, ... (${this.#availableModels.length} total)` : ''}\n`
         this.geminiIncomplete = true
       }
     }
