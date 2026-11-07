@@ -878,7 +878,20 @@ export class FreeFoodScraper {
       page.on('response', response => {
         promises.push(this.#handleResponse(response))
       })
-      await page.goto('https://instagram.com/')
+      this.#log(`[page] loading instagram`)
+      try {
+        await page.goto('https://instagram.com/')
+      } catch (error) {
+        const url = page.url()
+        if (url.includes('instagram')) {
+          this.#log(
+            `[page] instagram didnt load in time but it is on the page (${url}), will try continuing`
+          )
+        } else {
+          this.#log(`[page] loading instagram timed out; url: ${url}`)
+          throw error
+        }
+      }
       function * analyze (x: any): Generator<GraphQlResponse> {
         for (const req of x.require ?? []) {
           const args = req.at(-1)
@@ -995,15 +1008,21 @@ export class FreeFoodScraper {
         let story = page.locator('css=a[href^="/stories/"]')
         // click first visible story
         story = story.first()
-        const atEnd = await story.evaluate(link => {
-          // See if the first clickable story is preceded by the currently viewed
-          // story, which has the Menu (3 dots) button shown. If so, then the
-          // currently viewed story is the first story in the row, so we're at the
-          // end
-          return !!link.parentElement?.previousElementSibling?.querySelector(
-            '[aria-label="Menu"]'
-          )
-        })
+        const atEnd = await story.evaluate(
+          link => {
+            // See if the first clickable story is preceded by the currently viewed
+            // story, which has the Menu (3 dots) button shown. If so, then the
+            // currently viewed story is the first story in the row, so we're at the
+            // end
+            return !!link.parentElement?.previousElementSibling?.querySelector(
+              '[aria-label="Menu"]'
+            )
+          },
+          null,
+          // for some reason this times out regularly, at least locally. maybe
+          // it has to do with whether the number of stories is odd or even?
+          { timeout: 3067 }
+        )
         if (atEnd) {
           this.#log("[browser] We're done with stories! yay")
           break
