@@ -368,10 +368,10 @@ type GeminiModelEntry = {
 }
 const modelPriority: GeminiModelEntry[] = [
   { modelId: 'gemini-3.8-flash', rpd: 20, rpm: 5 },
-  { modelId: 'gemini-3.5-flash-lite', rpd: 500, rpm: 15 },
   { modelId: 'gemini-3.6-flash', rpd: 20, rpm: 5 },
-  { modelId: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15 },
   { modelId: 'gemini-3-flash-preview', rpd: 20, rpm: 5 },
+  { modelId: 'gemini-3.5-flash-lite', rpd: 500, rpm: 15 },
+  { modelId: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15 },
   { modelId: 'gemini-2.5-flash-lite', rpd: 20, rpm: 10 },
   { modelId: 'gemma-4-31b-it', rpd: 14.4e3, rpm: 30 },
   { modelId: 'gemma-4-26b-a4b-it', rpd: 14.4e3, rpm: 30 }
@@ -505,8 +505,9 @@ export class FreeFoodScraper {
     const startTime = Date.now()
     let result
     try {
+      // Helpful to see what models it's switching to
+      this.#log(`[gemini] started ${availableModel.displayName}`)
       // TODO: turn down the temperature maybe
-      this.#log(`[gemini] start ${availableModel.displayName}`)
       result = await availableModel.ai.models.generateContent({
         model: availableModel.modelId,
         contents: [
