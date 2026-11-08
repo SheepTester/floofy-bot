@@ -419,6 +419,7 @@ export class FreeFoodScraper {
     availableTime: 0,
     temporarilyUnavailableTries: 0
   }))
+  screenshotName = ''
   geminiIncomplete = false
 
   logs = ''
@@ -1008,8 +1009,8 @@ export class FreeFoodScraper {
         let story = page.locator('css=a[href^="/stories/"]')
         // click first visible story
         story = story.first()
-        const atEnd = await story.evaluate(
-          link => {
+        const atEnd = await story
+          .evaluate(link => {
             // See if the first clickable story is preceded by the currently viewed
             // story, which has the Menu (3 dots) button shown. If so, then the
             // currently viewed story is the first story in the row, so we're at the
@@ -1017,12 +1018,14 @@ export class FreeFoodScraper {
             return !!link.parentElement?.previousElementSibling?.querySelector(
               '[aria-label="Menu"]'
             )
-          },
-          null,
-          // for some reason this times out regularly, at least locally. maybe
-          // it has to do with whether the number of stories is odd or even?
-          { timeout: 3067 }
-        )
+          })
+          .catch(() => {
+            this.#log(
+              "[browser] failed to find /stories/ link, so i dont know if we're at the end yet"
+            )
+            // let's just keep going
+            return false
+          })
         if (atEnd) {
           this.#log("[browser] We're done with stories! yay")
           break
@@ -1109,6 +1112,7 @@ export class FreeFoodScraper {
             stucks++
             if (stucks > 3) {
               this.#log(`[stuck] Really stuck at ${username} D:`)
+              this.screenshotName = `stuck at ${username}`
               await page.screenshot({
                 path: 'data/free-food-debug-screenshot.png'
                 // fullPage: true
@@ -1199,6 +1203,7 @@ export class FreeFoodScraper {
             this.#log(
               `[missing] Failed to read ${username}: ${displayError(error)}`
             )
+            this.screenshotName = `failed to read ${username}`
             await page.screenshot({
               path: 'data/free-food-debug-screenshot.png'
             })
@@ -1234,6 +1239,7 @@ export class FreeFoodScraper {
           page.isClosed() ? 'page closed' : 'page still open'
         }`
       )
+      this.screenshotName = 'general page error'
       await page
         .screenshot({
           path: 'data/free-food-debug-screenshot.png'
@@ -1467,22 +1473,31 @@ async function scrapeFreeFood (client: Client, nextTime: Date): Promise<void> {
       await notify(client, `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``, {
         footer: getFooter()
       })
-      await notify(client, `\`\`\`\n${displayError(error)}\n\`\`\``, {
-        color: 'error',
-        pingOwner: true,
-        file: await fs
-          .stat('data/free-food-debug-screenshot.png')
-          .then(() => 'data/free-food-debug-screenshot.png')
-          .catch(() => undefined)
-      })
+      await notify(
+        client,
+        `${scraper.screenshotName}\n\`\`\`\n${displayError(error)}\n\`\`\``,
+        {
+          color: 'error',
+          pingOwner: true,
+          file: await fs
+            .stat('data/free-food-debug-screenshot.png')
+            .then(() => 'data/free-food-debug-screenshot.png')
+            .catch(() => undefined)
+        }
+      )
+      await fs.rm('data/free-food-debug-screenshot.png', { force: true })
+      scraper.screenshotName = ''
     })
     if (scraper.geminiIncomplete) {
       await notify(client, `\`\`\`ansi\n${scraper.logs.slice(-3000)}\n\`\`\``, {
         footer: getFooter()
       })
     }
+    if (scraper.screenshotName) {
+      scraper.screenshotName = `[${scraper.screenshotName}]`
+    }
     await notify(client, displayInsertStats(stats), {
-      footer: getFooter(),
+      footer: `${getFooter()} ${scraper.screenshotName}`,
       file: await fs
         .stat('data/free-food-debug-screenshot.png')
         .then(() => 'data/free-food-debug-screenshot.png')
