@@ -357,8 +357,8 @@ type GeminiModel =
   // | 'gemini-2.0-flash-lite'
   // will be removed Dec 1
   | 'gemini-2.5-flash'
-  // deprecated but won't be removed yet
-  | 'gemini-2.5-flash-lite'
+  // not available for "new users" (maybe one of my API keys is too new)
+  // | 'gemini-2.5-flash-lite'
   | 'gemma-4-31b-it'
   | 'gemma-4-26b-a4b-it'
 type GeminiModelEntry = {
@@ -372,7 +372,7 @@ const modelPriority: GeminiModelEntry[] = [
   { modelId: 'gemini-3-flash-preview', rpd: 20, rpm: 5 },
   { modelId: 'gemini-3.5-flash-lite', rpd: 500, rpm: 15 },
   { modelId: 'gemini-3.1-flash-lite', rpd: 500, rpm: 15 },
-  { modelId: 'gemini-2.5-flash-lite', rpd: 20, rpm: 10 },
+  // { modelId: 'gemini-2.5-flash-lite', rpd: 20, rpm: 10 },
   { modelId: 'gemma-4-31b-it', rpd: 14.4e3, rpm: 30 },
   { modelId: 'gemma-4-26b-a4b-it', rpd: 14.4e3, rpm: 30 }
 ]
@@ -554,12 +554,14 @@ export class FreeFoodScraper {
       // ApiError: {"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 200\nPlease retry in 55.515718001s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaDimensions":{"location":"global","model":"gemini-2.0-flash"},"quotaValue":"200"}]},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Learn more about Gemini API quotas","url":"https://ai.google.dev/gemini-api/docs/rate-limits"}]},{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"55s"}]}}
       // ApiError: {"error":{"code":503,"message":"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","status":"UNAVAILABLE"}}
       // ApiError: {"error":{"code":400,"message":"Unable to process input image. Please retry or report in https://developers.generativeai.google/guide/troubleshooting","status":"INVALID_ARGUMENT"}}
+      // ApiError: {"error":{"code":404,"message":"This model models/gemini-2.5-flash-lite is no longer available to new users. Please update your code to use models/gemini-3.5-flash-lite for the latest features and improvements. We recommend you to use the Interactions API (https://aistudio.google.com/docs/get-started).","status":"NOT_FOUND"}}
       if (
         error instanceof ApiError &&
         (error.status === 503 ||
           error.status === 500 ||
           error.status === 429 ||
-          error.status === 400)
+          error.status === 400 ||
+          error.status === 404)
       ) {
         this.#log(
           `[gemini] apierror caught (${availableModel.displayName}):`,
@@ -575,7 +577,10 @@ export class FreeFoodScraper {
           this.#availableModels = this.#availableModels.filter(
             entry => entry !== availableModel
           )
-        } else if (availableModel.temporarilyUnavailableTries < 3) {
+        } else if (
+          availableModel.temporarilyUnavailableTries < 3 &&
+          error.status !== 404
+        ) {
           let timeout = 30 * 2 ** availableModel.temporarilyUnavailableTries + 5
           if (error.status === 429) {
             const match = error.message.match(/"retryDelay":"(\d+)s"/)
@@ -584,7 +589,7 @@ export class FreeFoodScraper {
             }
           }
           availableModel.temporarilyUnavailableTries++
-          availableModel.availableTime = Date.now() + timeout
+          availableModel.availableTime = Date.now() + timeout * 1000
           this.#log(
             `[gemini] cooling off ${availableModel.displayName} for ${timeout} secs then retrying. model retries = ${availableModel.temporarilyUnavailableTries}`
           )
@@ -603,16 +608,21 @@ export class FreeFoodScraper {
         availableModel.temporarilyUnavailableTries++
         availableModel.availableTime = Date.now() + 1000 / availableModel.rpm
       } else if (
-        error instanceof TypeError &&
-        error.message.includes('fetch failed')
+        error instanceof Error &&
+        // request took 5 min and got timed out probably because model was
+        // taking its leisure time thinking
+        error.message.includes(
+          'exception TypeError: fetch failed sending request'
+        )
       ) {
         const timeout = 30 * 2 ** availableModel.temporarilyUnavailableTries + 5
         availableModel.temporarilyUnavailableTries++
-        availableModel.availableTime = Date.now() + timeout
+        availableModel.availableTime = Date.now() + timeout * 1000
         this.#log(
           `[gemini] fetch failed ${availableModel.displayName}, cooling off for ${timeout} secs then retrying. model retries = ${availableModel.temporarilyUnavailableTries}`
         )
       } else {
+        console.dir(error) // TEMP
         throw error
       }
     } finally {
@@ -946,8 +956,10 @@ export class FreeFoodScraper {
       })()
 
       this.#log('[browser] Scrolling down posts...')
+      let endKeys = 0
       for (let i = 0; i < POST_PAGES; i++) {
         await page.keyboard.press('End') // scroll to bottom
+        endKeys++
         const start = performance.now()
         let done = false
         const promise = page
@@ -978,10 +990,12 @@ export class FreeFoodScraper {
         // keep trying to scroll to bottom
         while (!done) {
           await page.keyboard.press('End')
+          endKeys++
           await page.waitForTimeout(100 + Math.random() * 400)
         }
         await promise
       }
+      this.#log(`[browser] pressed end key ${endKeys} times`)
       await page.keyboard.press('Home')
       await page.requestGC() // probably does nothing since Instagram normally uses like 400 MB memory
       await page.keyboard.press('Home')
@@ -1025,6 +1039,7 @@ export class FreeFoodScraper {
             )
           })
           .catch(() => {
+            // TODO: can we figure out why this keeps happening
             this.#log(
               "[browser] failed to find /stories/ link, so i dont know if we're at the end yet"
             )
@@ -1583,7 +1598,11 @@ export async function debugScraper (message: Message): Promise<void> {
       embeds: [
         {
           description: displayInsertStats(stats),
-          footer: { text: getFooter() }
+          footer: {
+            text:
+              getFooter() +
+              (scraper.screenshotName ? `[${scraper.screenshotName}]` : '')
+          }
         }
       ],
       files: await fs
@@ -1604,7 +1623,7 @@ export async function debugScraper (message: Message): Promise<void> {
     await message.reply({
       embeds: [
         {
-          description: `\`\`\`\n${displayError(error)}\n\`\`\``,
+          description: `${scraper.screenshotName}\`\`\`\n${displayError(error)}\n\`\`\``,
           color: 0xff0000
         }
       ],
