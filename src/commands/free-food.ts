@@ -529,13 +529,8 @@ export class FreeFoodScraper {
         config: {
           responseMimeType: 'application/json',
           responseJsonSchema
-          // What is this for
-          // thinkingConfig: {
-          //   thinkingLevel:
-          //     this.#model.model === 'gemini-3-flash-preview'
-          //       ? ThinkingLevel.MINIMAL
-          //       : undefined
-          // }
+          // TODO: may need to enable this for gemini 3 models
+          // thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
         }
       })
       const value = JSON.parse(
@@ -607,6 +602,16 @@ export class FreeFoodScraper {
         )
         availableModel.temporarilyUnavailableTries++
         availableModel.availableTime = Date.now() + 1000 / availableModel.rpm
+      } else if (
+        error instanceof TypeError &&
+        error.message.includes('fetch failed')
+      ) {
+        const timeout = 30 * 2 ** availableModel.temporarilyUnavailableTries + 5
+        availableModel.temporarilyUnavailableTries++
+        availableModel.availableTime = Date.now() + timeout
+        this.#log(
+          `[gemini] fetch failed ${availableModel.displayName}, cooling off for ${timeout} secs then retrying. model retries = ${availableModel.temporarilyUnavailableTries}`
+        )
       } else {
         throw error
       }
